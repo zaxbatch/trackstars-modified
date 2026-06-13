@@ -43,6 +43,7 @@
       "delay": false,
       "distortion": false,
       "lowpass": false
-    }
+    },
+    "thumbnail": "https://picsum.photos/id/41/200/200"
   }
 }
