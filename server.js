@@ -30,7 +30,6 @@ const dataFiles = {
   messages: './data/messages.json'
 };
 
-// Initialize data files
 if (!fs.existsSync(dataFiles.users)) {
   fs.writeFileSync(dataFiles.users, JSON.stringify({}));
 }
@@ -53,7 +52,6 @@ const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
-// Generate random thumbnail based on song title
 function generateRandomThumbnail(title) {
   const colors = [
     '667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', 
@@ -65,7 +63,6 @@ function generateRandomThumbnail(title) {
   return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&name=${encodedTitle}`;
 }
 
-// Audio upload configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'avatar') {
@@ -197,7 +194,6 @@ app.post('/api/login', async (req, res) => {
   });
 });
 
-// ============ AVATAR UPLOAD ============
 app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -218,7 +214,6 @@ app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), (req,
   res.json({ avatar: avatarUrl });
 });
 
-// ============ USER INTERACTION ROUTES ============
 app.get('/api/users', authenticateToken, (req, res) => {
   const users = readData(dataFiles.users);
   const userList = Object.keys(users).map(username => ({
@@ -473,74 +468,6 @@ app.get('/api/feed/following', authenticateToken, (req, res) => {
   res.json(followingSongs);
 });
 
-app.post('/api/users/:username/like-song', authenticateToken, (req, res) => {
-  const { songId } = req.body;
-  const users = readData(dataFiles.users);
-  const user = users[req.user.username];
-  const songs = readData(dataFiles.songs);
-  const song = songs[songId];
-  
-  if (!song) {
-    return res.status(404).json({ error: 'Song not found' });
-  }
-  
-  if (!user.likedSongs) user.likedSongs = [];
-  
-  let isLiked = false;
-  
-  if (user.likedSongs.includes(songId)) {
-    user.likedSongs = user.likedSongs.filter(id => id !== songId);
-    song.likes = (song.likes || 0) - 1;
-    isLiked = false;
-  } else {
-    user.likedSongs.push(songId);
-    song.likes = (song.likes || 0) + 1;
-    isLiked = true;
-  }
-  
-  writeData(dataFiles.users, users);
-  writeData(dataFiles.songs, songs);
-  
-  io.emit('song-liked', { songId, likes: song.likes });
-  
-  res.json({ 
-    liked: isLiked,
-    likes: song.likes || 0
-  });
-});
-
-// ============ MESSAGING ROUTES ============
-app.get('/api/messages/:userId', authenticateToken, (req, res) => {
-  const messages = readData(dataFiles.messages);
-  const conversationId = [req.user.username, req.params.userId].sort().join('-');
-  res.json(messages[conversationId] || []);
-});
-
-app.post('/api/messages', authenticateToken, (req, res) => {
-  const { to, text } = req.body;
-  const messages = readData(dataFiles.messages);
-  const conversationId = [req.user.username, to].sort().join('-');
-  
-  if (!messages[conversationId]) messages[conversationId] = [];
-  
-  const message = {
-    id: uuidv4(),
-    from: req.user.username,
-    to: to,
-    text: text,
-    timestamp: Date.now(),
-    read: false
-  };
-  
-  messages[conversationId].push(message);
-  writeData(dataFiles.messages, messages);
-  
-  io.to(to).emit('new-message', message);
-  
-  res.json(message);
-});
-
-// ============ SONG ROUTES ============
 app.get('/api/songs', (req, res) => {
   const songs = readData(dataFiles.songs);
   const songList = Object.values(songs).map(song => ({
@@ -555,8 +482,7 @@ app.get('/api/songs', (req, res) => {
     likes: song.likes || 0,
     createdAt: song.createdAt,
     isFeatured: song.isFeatured || false,
-    genre: song.genre || 'Electronic',
-    coverArt: song.coverArt || null
+    genre: song.genre || 'Electronic'
   }));
 
   songList.sort((a, b) => {
@@ -574,19 +500,11 @@ app.get('/api/songs/:id', (req, res) => {
   if (!song) {
     return res.status(404).json({ error: 'Song not found' });
   }
-
-  if (!song.tracks) song.tracks = [];
-  if (!song.comments) song.comments = [];
-  if (!song.voters) song.voters = {};
-  if (song.upvotes === undefined) song.upvotes = 0;
-  if (song.likes === undefined) song.likes = 0;
-  if (!song.thumbnail) song.thumbnail = generateRandomThumbnail(song.title);
-
   res.json(song);
 });
 
 app.post('/api/songs', authenticateToken, (req, res) => {
-  const { title, bpm = 120, genre = 'Electronic', coverArt = null, thumbnail } = req.body;
+  const { title, bpm = 120, genre = 'Electronic', thumbnail } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title required' });
@@ -602,7 +520,6 @@ app.post('/api/songs', authenticateToken, (req, res) => {
     creator: req.user.username,
     bpm: parseInt(bpm),
     genre: genre,
-    coverArt: coverArt,
     thumbnail: songThumbnail,
     createdAt: Date.now(),
     tracks: [],
@@ -614,12 +531,7 @@ app.post('/api/songs', authenticateToken, (req, res) => {
     currentPosition: 0,
     duration: 0,
     isFeatured: false,
-    fx: {
-      reverb: false,
-      delay: false,
-      distortion: false,
-      lowpass: false
-    }
+    fx: { reverb: false, delay: false, distortion: false, lowpass: false }
   };
 
   songs[songId] = newSong;
@@ -634,25 +546,6 @@ app.post('/api/songs', authenticateToken, (req, res) => {
 
   io.emit('song-created', newSong);
   res.json(newSong);
-});
-
-app.put('/api/songs/:id/thumbnail', authenticateToken, (req, res) => {
-  const { thumbnail } = req.body;
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.id];
-  
-  if (!song) {
-    return res.status(404).json({ error: 'Song not found' });
-  }
-  
-  if (song.creator !== req.user.username) {
-    return res.status(403).json({ error: 'Only the creator can change the thumbnail' });
-  }
-  
-  song.thumbnail = thumbnail;
-  writeData(dataFiles.songs, songs);
-  
-  res.json({ thumbnail });
 });
 
 app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req, res) => {
@@ -697,22 +590,7 @@ app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req
   };
 
   song.tracks.push(newTrack);
-
-  if (song.tracks.length === 1) {
-    song.duration = 60;
-  }
-
   writeData(dataFiles.songs, songs);
-
-  const users = readData(dataFiles.users);
-  if (users[req.user.username]) {
-    if (!users[req.user.username].contributedTo) users[req.user.username].contributedTo = [];
-    if (!users[req.user.username].contributedTo.includes(song.id)) {
-      users[req.user.username].contributedTo.push(song.id);
-      writeData(dataFiles.users, users);
-    }
-  }
-
   io.to(song.id).emit('track-added', { songId: song.id, track: newTrack });
   res.json(newTrack);
 });
@@ -739,16 +617,6 @@ app.delete('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) =>
   }
 
   song.tracks.splice(trackIndex, 1);
-
-  const users = readData(dataFiles.users);
-  if (users[req.user.username] && users[req.user.username].contributedTo) {
-    const songIndex = users[req.user.username].contributedTo.indexOf(song.id);
-    if (songIndex !== -1) {
-      users[req.user.username].contributedTo.splice(songIndex, 1);
-      writeData(dataFiles.users, users);
-    }
-  }
-
   writeData(dataFiles.songs, songs);
   
   io.to(song.id).emit('track-deleted', {
@@ -758,39 +626,6 @@ app.delete('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) =>
   });
   
   res.json({ success: true, message: 'Track deleted successfully' });
-});
-
-app.put('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.songId];
-  
-  if (!song) {
-    return res.status(404).json({ error: 'Song not found' });
-  }
-  
-  if (!song.tracks) song.tracks = [];
-  
-  const trackIndex = song.tracks.findIndex(t => t.id === req.params.trackId);
-  if (trackIndex === -1) {
-    return res.status(404).json({ error: 'Track not found' });
-  }
-  
-  const { volume, muted, solo, fx } = req.body;
-  
-  if (volume !== undefined) song.tracks[trackIndex].volume = volume;
-  if (muted !== undefined) song.tracks[trackIndex].muted = muted;
-  if (solo !== undefined) song.tracks[trackIndex].solo = solo;
-  if (fx !== undefined) song.tracks[trackIndex].fx = { ...song.tracks[trackIndex].fx, ...fx };
-  
-  writeData(dataFiles.songs, songs);
-  
-  io.to(song.id).emit('track-updated', {
-    songId: song.id,
-    trackId: req.params.trackId,
-    updates: { volume, muted, solo, fx }
-  });
-  
-  res.json(song.tracks[trackIndex]);
 });
 
 app.post('/api/songs/:songId/track/:trackId/vote', authenticateToken, (req, res) => {
@@ -830,83 +665,6 @@ app.post('/api/songs/:songId/track/:trackId/vote', authenticateToken, (req, res)
   writeData(dataFiles.songs, songs);
   io.to(song.id).emit('track-voted', { songId: song.id, trackId: req.params.trackId, votes: track.votes });
   res.json({ votes: track.votes });
-});
-
-app.post('/api/songs/:id/comment', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.id];
-  
-  if (!song) {
-    return res.status(404).json({ error: 'Song not found' });
-  }
-
-  if (!song.comments) song.comments = [];
-
-  const comment = {
-    id: uuidv4(),
-    username: req.user.username,
-    text: req.body.text,
-    createdAt: Date.now(),
-    likes: 0,
-    likedBy: []
-  };
-
-  song.comments.push(comment);
-  writeData(dataFiles.songs, songs);
-  
-  io.to(song.id).emit('new-comment', comment);
-  res.json(comment);
-});
-
-app.post('/api/comments/:commentId/like', authenticateToken, (req, res) => {
-  const { songId } = req.body;
-  const songs = readData(dataFiles.songs);
-  const song = songs[songId];
-  
-  if (!song) return res.status(404).json({ error: 'Song not found' });
-  
-  const comment = song.comments.find(c => c.id === req.params.commentId);
-  if (!comment) return res.status(404).json({ error: 'Comment not found' });
-  
-  if (!comment.likedBy) comment.likedBy = [];
-  
-  let isLiked = false;
-  
-  if (comment.likedBy.includes(req.user.username)) {
-    comment.likedBy = comment.likedBy.filter(u => u !== req.user.username);
-    comment.likes--;
-    isLiked = false;
-  } else {
-    comment.likedBy.push(req.user.username);
-    comment.likes++;
-    isLiked = true;
-  }
-  
-  writeData(dataFiles.songs, songs);
-  res.json({ likes: comment.likes, liked: isLiked });
-});
-
-// ============ FX ROUTES ============
-app.post('/api/songs/:songId/fx', authenticateToken, (req, res) => {
-  const { trackId, fx } = req.body;
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.songId];
-  
-  if (!song) return res.status(404).json({ error: 'Song not found' });
-  
-  const track = song.tracks.find(t => t.id === trackId);
-  if (!track) return res.status(404).json({ error: 'Track not found' });
-  
-  track.fx = { ...track.fx, ...fx };
-  writeData(dataFiles.songs, songs);
-  
-  io.to(song.id).emit('track-updated', {
-    songId: song.id,
-    trackId: trackId,
-    updates: { fx: track.fx }
-  });
-  
-  res.json(track.fx);
 });
 
 // ============ SOCKET.IO ============

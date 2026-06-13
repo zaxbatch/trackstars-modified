@@ -135,8 +135,34 @@
           <input type="file" id="audio-file" accept="audio/*" style="display: none;">
           <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
         </div>
+        
+        <!-- Recording Settings -->
+        <div class="recording-settings">
+          <div class="setting-item">
+            <label class="switch">
+              <input type="checkbox" id="metronome-toggle" checked>
+              <span class="slider round"></span>
+            </label>
+            <span class="setting-label">🎵 Metronome</span>
+          </div>
+          <div class="setting-item">
+            <label class="switch">
+              <input type="checkbox" id="countin-toggle" checked>
+              <span class="slider round"></span>
+            </label>
+            <span class="setting-label">⏱️ 3-Second Count-In</span>
+          </div>
+        </div>
+        
+        <div id="countin-display" class="countin-display" style="display: none;">
+          <span id="countin-number" class="countin-number">3</span>
+          <div class="countin-progress">
+            <div id="countin-progress-bar" class="countin-progress-bar"></div>
+          </div>
+        </div>
+        
         <div id="recording-status" class="recording-status"></div>
-        <div class="metronome-hint">🎵 Recording will sync with BPM for perfect timing</div>
+        <div class="metronome-hint">🎵 Toggle metronome for perfect timing during recording</div>
       </div>
     </div>
 
@@ -204,7 +230,7 @@
       </div>
     </div>
 
-    <!-- User Profile View Modal (for viewing other users) -->
+    <!-- User Profile View Modal -->
     <div id="user-profile-modal" class="user-profile-modal">
       <div class="user-profile-content">
         <div class="user-profile-header">

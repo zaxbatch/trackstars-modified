@@ -20,6 +20,10 @@ let isRefreshing = false;
 let currentThumbnail = null;
 let metronomeInterval = null;
 let metronomeContext = null;
+let metronomeEnabled = true;
+let countInEnabled = true;
+let countInActive = false;
+let countInInterval = null;
 
 // API wrapper
 const api = {
@@ -179,6 +183,7 @@ function logout() {
   if (isPlaying) stopPlayback();
   if (isRecording) stopAudioRecording();
   if (metronomeInterval) clearInterval(metronomeInterval);
+  if (countInInterval) clearInterval(countInInterval);
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
@@ -194,8 +199,10 @@ function logout() {
   location.reload();
 }
 
-// Play metronome click for recording sync
+// Play metronome click
 function playMetronomeClick() {
+  if (!metronomeEnabled && !countInActive) return;
+  
   if (!metronomeContext) {
     metronomeContext = new (window.AudioContext || window.webkitAudioContext)();
   }
@@ -206,8 +213,13 @@ function playMetronomeClick() {
   oscillator.connect(gain);
   gain.connect(metronomeContext.destination);
   
-  oscillator.frequency.value = 1000;
-  gain.gain.value = 0.3;
+  if (countInActive) {
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.4;
+  } else {
+    oscillator.frequency.value = 1000;
+    gain.gain.value = 0.3;
+  }
   
   oscillator.start();
   gain.gain.exponentialRampToValueAtTime(0.00001, metronomeContext.currentTime + 0.1);
@@ -217,10 +229,12 @@ function playMetronomeClick() {
 function startMetronome() {
   if (metronomeInterval) clearInterval(metronomeInterval);
   
+  if (!metronomeEnabled) return;
+  
   const beatInterval = (60 / bpm) * 1000;
   
   metronomeInterval = setInterval(() => {
-    if (isRecording) {
+    if (isRecording && !countInActive) {
       playMetronomeClick();
     }
   }, beatInterval);
@@ -231,6 +245,76 @@ function stopMetronome() {
     clearInterval(metronomeInterval);
     metronomeInterval = null;
   }
+}
+
+// Count-in function
+async function startCountIn() {
+  return new Promise((resolve) => {
+    countInActive = true;
+    let count = 3;
+    const countinDisplay = document.getElementById('countin-display');
+    const countinNumber = document.getElementById('countin-number');
+    const countinProgressBar = document.getElementById('countin-progress-bar');
+    
+    countinDisplay.style.display = 'block';
+    countinNumber.textContent = count;
+    countinProgressBar.style.width = '0%';
+    
+    const playCountSound = (num) => {
+      if (!metronomeContext) {
+        metronomeContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      const oscillator = metronomeContext.createOscillator();
+      const gain = metronomeContext.createGain();
+      
+      oscillator.connect(gain);
+      gain.connect(metronomeContext.destination);
+      
+      if (num === 1) {
+        oscillator.frequency.value = 660;
+        gain.gain.value = 0.5;
+      } else {
+        oscillator.frequency.value = 880;
+        gain.gain.value = 0.4;
+      }
+      
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.00001, metronomeContext.currentTime + 0.15);
+      oscillator.stop(metronomeContext.currentTime + 0.15);
+    };
+    
+    countInInterval = setInterval(() => {
+      if (count > 0) {
+        playCountSound(count);
+        countinNumber.textContent = count;
+        countinProgressBar.style.width = `${((3 - count) / 3) * 100}%`;
+        count--;
+      } else {
+        clearInterval(countInInterval);
+        countinNumber.textContent = 'GO!';
+        countinProgressBar.style.width = '100%';
+        
+        if (metronomeContext) {
+          const oscillator = metronomeContext.createOscillator();
+          const gain = metronomeContext.createGain();
+          oscillator.connect(gain);
+          gain.connect(metronomeContext.destination);
+          oscillator.frequency.value = 523.25;
+          gain.gain.value = 0.5;
+          oscillator.start();
+          gain.gain.exponentialRampToValueAtTime(0.00001, metronomeContext.currentTime + 0.2);
+          oscillator.stop(metronomeContext.currentTime + 0.2);
+        }
+        
+        setTimeout(() => {
+          countinDisplay.style.display = 'none';
+          countInActive = false;
+          resolve();
+        }, 500);
+      }
+    }, 1000);
+  });
 }
 
 // Audio functions
@@ -450,11 +534,17 @@ async function startAudioRecording() {
       audioChunks = [];
     };
     
+    if (countInEnabled) {
+      document.getElementById('recording-status').innerHTML = '⏱️ Count-in starting...';
+      document.getElementById('recording-status').style.color = '#f39c12';
+      await startCountIn();
+    }
+    
     mediaRecorder.start(1000);
     isRecording = true;
     document.getElementById('record-btn').style.display = 'none';
     document.getElementById('stop-record-btn').style.display = 'inline-block';
-    document.getElementById('recording-status').innerHTML = '🔴 RECORDING - Follow the metronome click!';
+    document.getElementById('recording-status').innerHTML = '🔴 RECORDING - ' + (metronomeEnabled ? 'Metronome ON' : 'Metronome OFF');
     document.getElementById('recording-status').style.color = '#e74c3c';
     socket.emit('recording-started', { songId: currentSong.id, username: currentUser.username });
   } catch (error) {
@@ -716,6 +806,7 @@ async function selectSong(songId) {
     if (isPlaying) stopPlayback();
     if (isRecording) stopAudioRecording();
     if (metronomeInterval) clearInterval(metronomeInterval);
+    if (countInInterval) clearInterval(countInInterval);
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
       mediaStream = null;
@@ -754,7 +845,6 @@ async function selectSong(songId) {
     currentPosition = 0;
     updatePositionDisplay(0);
     
-    // Hide feed views, show studio
     document.querySelectorAll('.feed-view').forEach(view => view.classList.remove('active'));
     document.querySelector('.studio-view').classList.add('active');
     document.querySelector('.feed-tabs').style.display = 'none';
@@ -872,7 +962,6 @@ async function toggleTrackFX(trackId, fxName) {
   }
 }
 
-// Create song with thumbnail
 async function createSong() {
   const title = document.getElementById('new-song-title').value;
   let bpmVal = parseInt(document.getElementById('new-song-bpm').value);
@@ -910,13 +999,11 @@ function randomizeThumbnail() {
   document.getElementById('preview-thumb').src = currentThumbnail;
 }
 
-// Profile functions
 async function openProfileModal() {
   const modal = document.getElementById('profile-modal');
   const avatar = document.getElementById('profile-modal-avatar');
   const bio = document.getElementById('profile-bio');
   
-  // Fetch fresh user data
   const response = await fetch(`/api/users/${currentUser.username}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
@@ -961,11 +1048,11 @@ async function uploadAvatar(file) {
   }
 }
 
-// Back to feed
 function backToLibrary() {
   if (isPlaying) stopPlayback();
   if (isRecording) stopAudioRecording();
   if (metronomeInterval) clearInterval(metronomeInterval);
+  if (countInInterval) clearInterval(countInInterval);
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
@@ -988,7 +1075,6 @@ function backToLibrary() {
   document.querySelector('.studio-view').classList.remove('active');
   document.querySelector('.feed-tabs').style.display = 'flex';
   
-  // Show active feed
   const activeFeed = document.querySelector('.feed-tab.active').dataset.feed;
   document.getElementById(`${activeFeed}-feed`).classList.add('active');
   
@@ -1056,7 +1142,6 @@ async function uploadTrack() {
   }
 }
 
-// Socket functions
 function initSocket() {
   socket = io();
   
@@ -1121,7 +1206,6 @@ function initSocket() {
   });
 }
 
-// Utility functions
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
@@ -1191,7 +1275,6 @@ function displaySearchResults(songs, users) {
   
   let html = '';
   
-  // Songs section
   if (songs && songs.length > 0) {
     html += `
       <div class="search-result-section">
@@ -1218,7 +1301,6 @@ function displaySearchResults(songs, users) {
     `;
   }
   
-  // Users section
   if (users && users.length > 0) {
     html += `
       <div class="search-result-section">
@@ -1403,7 +1485,6 @@ function initSearch() {
   });
 }
 
-// Feed navigation
 function initFeedNavigation() {
   const feedTabs = document.querySelectorAll('.feed-tab');
   
@@ -1424,9 +1505,7 @@ function initFeedNavigation() {
   });
 }
 
-// Event listeners
 function setupEventListeners() {
-  // Auth tabs
   document.querySelectorAll('.auth-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
@@ -1437,7 +1516,6 @@ function setupEventListeners() {
     });
   });
   
-  // Login form
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('login-username').value;
@@ -1460,7 +1538,6 @@ function setupEventListeners() {
     }
   });
   
-  // Register form
   document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('reg-username').value;
@@ -1485,14 +1562,10 @@ function setupEventListeners() {
     }
   });
   
-  // Logout
   document.getElementById('logout-btn').addEventListener('click', logout);
-  
-  // Profile click
   document.getElementById('header-avatar').addEventListener('click', openProfileModal);
   document.querySelector('.username').addEventListener('click', openProfileModal);
   
-  // Profile modal
   document.querySelector('.close-modal').addEventListener('click', () => {
     document.getElementById('profile-modal').style.display = 'none';
   });
@@ -1504,7 +1577,6 @@ function setupEventListeners() {
     if (e.target.files[0]) uploadAvatar(e.target.files[0]);
   });
   
-  // Create modal
   document.getElementById('open-create-modal').addEventListener('click', () => {
     currentThumbnail = null;
     document.getElementById('preview-thumb').src = '';
@@ -1516,7 +1588,6 @@ function setupEventListeners() {
   });
   document.getElementById('randomize-thumb-btn').addEventListener('click', randomizeThumbnail);
   
-  // Transport controls
   document.getElementById('play-btn').addEventListener('click', () => {
     if (isPlaying) {
       pausePlayback();
@@ -1538,7 +1609,6 @@ function setupEventListeners() {
     });
   }
   
-  // Recording
   document.getElementById('record-btn').addEventListener('click', startRecordingWithPlayback);
   document.getElementById('stop-record-btn').addEventListener('click', stopRecordingAndPlayback);
   document.getElementById('upload-btn').addEventListener('click', () => {
@@ -1547,7 +1617,24 @@ function setupEventListeners() {
   document.getElementById('audio-file').addEventListener('change', uploadTrack);
   document.getElementById('back-btn').addEventListener('click', backToLibrary);
   
-  // Search
+  // Recording settings
+  document.getElementById('metronome-toggle').addEventListener('change', (e) => {
+    metronomeEnabled = e.target.checked;
+    if (isRecording) {
+      if (metronomeEnabled) {
+        startMetronome();
+      } else {
+        stopMetronome();
+      }
+    }
+    showToast(metronomeEnabled ? 'Metronome ON' : 'Metronome OFF');
+  });
+  
+  document.getElementById('countin-toggle').addEventListener('change', (e) => {
+    countInEnabled = e.target.checked;
+    showToast(countInEnabled ? 'Count-in ON' : 'Count-in OFF');
+  });
+  
   document.getElementById('search-btn').addEventListener('click', openSearchModal);
   document.getElementById('close-search').addEventListener('click', closeSearchModal);
   document.querySelector('.close-user-profile').addEventListener('click', () => {
@@ -1563,7 +1650,6 @@ function setupEventListeners() {
   
   initSearch();
   
-  // Modal close on outside click
   const modal = document.getElementById('create-modal');
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
@@ -1579,7 +1665,6 @@ function setupEventListeners() {
   });
 }
 
-// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
   const savedToken = localStorage.getItem('token');
   const savedUser = localStorage.getItem('user');
@@ -1604,7 +1689,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Make functions global for onclick handlers
 window.selectSong = selectSong;
 window.toggleMute = toggleMute;
 window.adjustVolume = adjustVolume;
