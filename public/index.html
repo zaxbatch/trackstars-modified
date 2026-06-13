@@ -63,6 +63,34 @@
         <span class="username" id="current-user"></span>
         <button class="logout-btn" id="logout-btn">Logout</button>
       </div>
+            <!-- Edit Song Modal -->
+      <div id="edit-song-modal" class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3>Edit Track</h3>
+            <button class="close-edit-modal">&times;</button>
+          </div>
+          <div class="edit-song-section">
+            <label>Track Title</label>
+            <input type="text" id="edit-song-title" placeholder="Track Title">
+          </div>
+          <div class="edit-song-section">
+            <label>Thumbnail</label>
+            <div class="edit-thumb-preview">
+              <img id="edit-thumb-preview" src="">
+              <div class="edit-thumb-buttons">
+                <button id="edit-random-thumb">🎲 Random</button>
+                <button id="edit-upload-thumb">📁 Upload</button>
+                <input type="file" id="edit-thumb-file" accept="image/*" style="display:none">
+              </div>
+            </div>
+          </div>
+          <div class="modal-buttons">
+            <button id="save-song-changes" class="confirm-btn">Save Changes</button>
+            <button id="delete-song-version" class="delete-version-btn">🗑️ Delete Version</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Navigation -->

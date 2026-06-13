@@ -565,3 +565,64 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`⭐ TrackStars running on http://localhost:${PORT}`);
 });
+
+// ============ SONG MANAGEMENT ROUTES ============
+// Update song title
+app.put('/api/songs/:id/title', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can edit the song' });
+  
+  song.title = req.body.title;
+  writeData(dataFiles.songs, songs);
+  io.to(song.id).emit('song-updated', { songId: song.id, title: song.title });
+  res.json({ title: song.title });
+});
+
+// Update song thumbnail
+app.put('/api/songs/:id/thumbnail', authenticateToken, upload.single('thumbnail'), (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can change the thumbnail' });
+  
+  if (req.file) {
+    song.thumbnail = '/uploads/thumbnails/' + req.file.filename;
+  } else if (req.body.thumbnail) {
+    song.thumbnail = req.body.thumbnail;
+  } else {
+    return res.status(400).json({ error: 'No thumbnail provided' });
+  }
+  
+  writeData(dataFiles.songs, songs);
+  io.to(song.id).emit('song-updated', { songId: song.id, thumbnail: song.thumbnail });
+  res.json({ thumbnail: song.thumbnail });
+});
+
+// Delete song (version)
+app.delete('/api/songs/:id', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can delete the song' });
+  
+  // Remove from parent's forks list if this is a fork
+  if (song.parentId && songs[song.parentId]) {
+    songs[song.parentId].forks = songs[song.parentId].forks?.filter(f => f !== req.params.id) || [];
+  }
+  
+  // Remove from user's contributedTo
+  const users = readData(dataFiles.users);
+  if (users[req.user.username]) {
+    users[req.user.username].contributedTo = users[req.user.username].contributedTo?.filter(id => id !== req.params.id) || [];
+    writeData(dataFiles.users, users);
+  }
+  
+  // Delete the song
+  delete songs[req.params.id];
+  writeData(dataFiles.songs, songs);
+  
+  io.emit('song-deleted', { songId: req.params.id });
+  res.json({ success: true });
+});
