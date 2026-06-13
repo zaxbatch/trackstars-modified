@@ -20,7 +20,7 @@ app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
 // Create necessary directories
-['data', 'uploads', 'uploads/tracks'].forEach(dir => {
+['data', 'uploads', 'uploads/tracks', 'uploads/avatars', 'uploads/thumbnails'].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -53,9 +53,27 @@ const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
+// Generate random thumbnail based on song title
+function generateRandomThumbnail(title) {
+  const colors = [
+    '667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', 
+    '1abc9c', 'e67e22', '9b59b6', '2c3e50', '16a085', 'c0392b',
+    '8e44ad', 'd35400', '7f8c8d', '2ecc71', 'e84393', '6c5ce7'
+  ];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const encodedTitle = encodeURIComponent(title.substring(0, 20));
+  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&name=${encodedTitle}`;
+}
+
 // Audio upload configuration
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/tracks/'),
+  destination: (req, file, cb) => {
+    if (file.fieldname === 'avatar') {
+      cb(null, 'uploads/avatars/');
+    } else {
+      cb(null, 'uploads/tracks/');
+    }
+  },
   filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
 });
 
@@ -63,11 +81,20 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/mp3', 'audio/x-m4a'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
+    if (file.fieldname === 'avatar') {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid image format'));
+      }
     } else {
-      cb(new Error('Invalid audio format'));
+      const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/mp3', 'audio/x-m4a'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid audio format'));
+      }
     }
   }
 });
@@ -116,7 +143,7 @@ app.post('/api/register', async (req, res) => {
     savedSongs: [],
     createdAt: Date.now(),
     bio: '',
-    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff`
+    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff&size=200`
   };
 
   writeData(dataFiles.users, users);
@@ -165,9 +192,30 @@ app.post('/api/login', async (req, res) => {
       likedSongs: user.likedSongs || [],
       savedSongs: user.savedSongs || [],
       bio: user.bio || '',
-      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff`
+      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff&size=200`
     }
   });
+});
+
+// ============ AVATAR UPLOAD ============
+app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  
+  const users = readData(dataFiles.users);
+  const user = users[req.user.username];
+  
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  const avatarUrl = '/uploads/avatars/' + req.file.filename;
+  user.avatar = avatarUrl;
+  
+  writeData(dataFiles.users, users);
+  
+  res.json({ avatar: avatarUrl });
 });
 
 // ============ USER INTERACTION ROUTES ============
@@ -176,7 +224,8 @@ app.get('/api/users', authenticateToken, (req, res) => {
   const userList = Object.keys(users).map(username => ({
     username,
     avatar: users[username].avatar,
-    followersCount: users[username].followers?.length || 0
+    followersCount: users[username].followers?.length || 0,
+    followingCount: users[username].following?.length || 0
   }));
   res.json(userList);
 });
@@ -244,6 +293,186 @@ app.post('/api/users/:username/follow', authenticateToken, (req, res) => {
   });
 });
 
+app.put('/api/users/bio', authenticateToken, (req, res) => {
+  const { bio } = req.body;
+  const users = readData(dataFiles.users);
+  const user = users[req.user.username];
+  
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  user.bio = bio;
+  writeData(dataFiles.users, users);
+  
+  res.json({ bio });
+});
+
+// ============ SEARCH ROUTES ============
+app.get('/api/search/songs', authenticateToken, (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim() === '') {
+    return res.json([]);
+  }
+  
+  const songs = readData(dataFiles.songs);
+  const users = readData(dataFiles.users);
+  const searchTerm = q.toLowerCase().trim();
+  
+  const results = Object.values(songs)
+    .filter(song => 
+      song.title.toLowerCase().includes(searchTerm) ||
+      song.creator.toLowerCase().includes(searchTerm) ||
+      (song.genre && song.genre.toLowerCase().includes(searchTerm))
+    )
+    .map(song => ({
+      id: song.id,
+      title: song.title,
+      creator: song.creator,
+      creatorAvatar: users[song.creator]?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+      bpm: song.bpm || 120,
+      trackCount: (song.tracks || []).length,
+      likes: song.likes || 0,
+      createdAt: song.createdAt,
+      genre: song.genre || 'Electronic',
+      type: 'song'
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
+  
+  res.json(results);
+});
+
+app.get('/api/search/users', authenticateToken, (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim() === '') {
+    return res.json([]);
+  }
+  
+  const users = readData(dataFiles.users);
+  const currentUsername = req.user.username;
+  const searchTerm = q.toLowerCase().trim();
+  
+  const results = Object.values(users)
+    .filter(user => 
+      user.username.toLowerCase().includes(searchTerm) &&
+      user.username !== currentUsername
+    )
+    .map(user => ({
+      username: user.username,
+      avatar: user.avatar,
+      bio: user.bio || 'Music creator on TrackStars',
+      followersCount: user.followers?.length || 0,
+      tracksCount: user.contributedTo?.length || 0,
+      isFollowing: (user.followers || []).includes(currentUsername),
+      type: 'user'
+    }))
+    .sort((a, b) => b.followersCount - a.followersCount);
+  
+  res.json(results);
+});
+
+app.get('/api/search/all', authenticateToken, (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim() === '') {
+    return res.json({ songs: [], users: [] });
+  }
+  
+  const songs = readData(dataFiles.songs);
+  const users = readData(dataFiles.users);
+  const currentUsername = req.user.username;
+  const searchTerm = q.toLowerCase().trim();
+  
+  const songResults = Object.values(songs)
+    .filter(song => 
+      song.title.toLowerCase().includes(searchTerm) ||
+      song.creator.toLowerCase().includes(searchTerm) ||
+      (song.genre && song.genre.toLowerCase().includes(searchTerm))
+    )
+    .map(song => ({
+      id: song.id,
+      title: song.title,
+      creator: song.creator,
+      creatorAvatar: users[song.creator]?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+      bpm: song.bpm || 120,
+      trackCount: (song.tracks || []).length,
+      likes: song.likes || 0,
+      createdAt: song.createdAt,
+      genre: song.genre || 'Electronic',
+      type: 'song'
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 10);
+  
+  const userResults = Object.values(users)
+    .filter(user => 
+      user.username.toLowerCase().includes(searchTerm) &&
+      user.username !== currentUsername
+    )
+    .map(user => ({
+      username: user.username,
+      avatar: user.avatar,
+      bio: user.bio || 'Music creator on TrackStars',
+      followersCount: user.followers?.length || 0,
+      tracksCount: user.contributedTo?.length || 0,
+      isFollowing: (user.followers || []).includes(currentUsername),
+      type: 'user'
+    }))
+    .sort((a, b) => b.followersCount - a.followersCount)
+    .slice(0, 10);
+  
+  res.json({ songs: songResults, users: userResults });
+});
+
+// ============ FEED ROUTES ============
+app.get('/api/feed/community', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const songList = Object.values(songs).map(song => ({
+    id: song.id,
+    title: song.title,
+    creator: song.creator,
+    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+    thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+    bpm: song.bpm || 120,
+    trackCount: (song.tracks || []).length,
+    totalContributors: new Set((song.tracks || []).map(t => t.username)).size,
+    likes: song.likes || 0,
+    createdAt: song.createdAt,
+    genre: song.genre || 'Electronic',
+    isNew: (Date.now() - song.createdAt) < 7 * 24 * 60 * 60 * 1000
+  }));
+
+  songList.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(songList.slice(0, 20));
+});
+
+app.get('/api/feed/following', authenticateToken, (req, res) => {
+  const users = readData(dataFiles.users);
+  const currentUser = users[req.user.username];
+  const following = currentUser.following || [];
+  const songs = readData(dataFiles.songs);
+  
+  const followingSongs = Object.values(songs).filter(song => 
+    following.includes(song.creator)
+  ).map(song => ({
+    id: song.id,
+    title: song.title,
+    creator: song.creator,
+    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+    thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+    bpm: song.bpm || 120,
+    trackCount: (song.tracks || []).length,
+    totalContributors: new Set((song.tracks || []).map(t => t.username)).size,
+    likes: song.likes || 0,
+    createdAt: song.createdAt,
+    genre: song.genre || 'Electronic'
+  }));
+  
+  followingSongs.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(followingSongs);
+});
+
 app.post('/api/users/:username/like-song', authenticateToken, (req, res) => {
   const { songId } = req.body;
   const users = readData(dataFiles.users);
@@ -272,32 +501,12 @@ app.post('/api/users/:username/like-song', authenticateToken, (req, res) => {
   writeData(dataFiles.users, users);
   writeData(dataFiles.songs, songs);
   
+  io.emit('song-liked', { songId, likes: song.likes });
+  
   res.json({ 
     liked: isLiked,
     likes: song.likes || 0
   });
-});
-
-app.post('/api/users/:username/save-song', authenticateToken, (req, res) => {
-  const { songId } = req.body;
-  const users = readData(dataFiles.users);
-  const user = users[req.user.username];
-  
-  if (!user.savedSongs) user.savedSongs = [];
-  
-  let isSaved = false;
-  
-  if (user.savedSongs.includes(songId)) {
-    user.savedSongs = user.savedSongs.filter(id => id !== songId);
-    isSaved = false;
-  } else {
-    user.savedSongs.push(songId);
-    isSaved = true;
-  }
-  
-  writeData(dataFiles.users, users);
-  
-  res.json({ saved: isSaved });
 });
 
 // ============ MESSAGING ROUTES ============
@@ -338,6 +547,7 @@ app.get('/api/songs', (req, res) => {
     id: song.id,
     title: song.title,
     creator: song.creator,
+    thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
     bpm: song.bpm || 120,
     trackCount: (song.tracks || []).length,
     totalContributors: new Set((song.tracks || []).map(t => t.username)).size,
@@ -370,12 +580,13 @@ app.get('/api/songs/:id', (req, res) => {
   if (!song.voters) song.voters = {};
   if (song.upvotes === undefined) song.upvotes = 0;
   if (song.likes === undefined) song.likes = 0;
+  if (!song.thumbnail) song.thumbnail = generateRandomThumbnail(song.title);
 
   res.json(song);
 });
 
 app.post('/api/songs', authenticateToken, (req, res) => {
-  const { title, bpm = 120, genre = 'Electronic', coverArt = null } = req.body;
+  const { title, bpm = 120, genre = 'Electronic', coverArt = null, thumbnail } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title required' });
@@ -383,6 +594,7 @@ app.post('/api/songs', authenticateToken, (req, res) => {
 
   const songs = readData(dataFiles.songs);
   const songId = uuidv4();
+  const songThumbnail = thumbnail || generateRandomThumbnail(title);
   
   const newSong = {
     id: songId,
@@ -391,6 +603,7 @@ app.post('/api/songs', authenticateToken, (req, res) => {
     bpm: parseInt(bpm),
     genre: genre,
     coverArt: coverArt,
+    thumbnail: songThumbnail,
     createdAt: Date.now(),
     tracks: [],
     upvotes: 0,
@@ -421,6 +634,25 @@ app.post('/api/songs', authenticateToken, (req, res) => {
 
   io.emit('song-created', newSong);
   res.json(newSong);
+});
+
+app.put('/api/songs/:id/thumbnail', authenticateToken, (req, res) => {
+  const { thumbnail } = req.body;
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  
+  if (!song) {
+    return res.status(404).json({ error: 'Song not found' });
+  }
+  
+  if (song.creator !== req.user.username) {
+    return res.status(403).json({ error: 'Only the creator can change the thumbnail' });
+  }
+  
+  song.thumbnail = thumbnail;
+  writeData(dataFiles.songs, songs);
+  
+  res.json({ thumbnail });
 });
 
 app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req, res) => {

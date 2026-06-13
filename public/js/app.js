@@ -17,6 +17,9 @@ let audioChunks = [];
 let mediaStream = null;
 let bpm = 120;
 let isRefreshing = false;
+let currentThumbnail = null;
+let metronomeInterval = null;
+let metronomeContext = null;
 
 // API wrapper
 const api = {
@@ -47,6 +50,10 @@ const api = {
 
   async createSong(data) {
     return this.request('/api/songs', { method: 'POST', body: JSON.stringify(data) });
+  },
+
+  async updateSongThumbnail(songId, thumbnail) {
+    return this.request(`/api/songs/${songId}/thumbnail`, { method: 'PUT', body: JSON.stringify({ thumbnail }) });
   },
 
   async uploadTrack(songId, file) {
@@ -80,8 +87,51 @@ const api = {
       method: 'POST',
       body: JSON.stringify({ text })
     });
+  },
+
+  async followUser(username) {
+    return this.request(`/api/users/${username}/follow`, { method: 'POST' });
+  },
+
+  async updateBio(bio) {
+    return this.request('/api/users/bio', { method: 'PUT', body: JSON.stringify({ bio }) });
+  },
+
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await fetch('/api/upload-avatar', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || 'Upload failed');
+    }
+    return response.json();
+  },
+
+  async getCommunityFeed() {
+    return this.request('/api/feed/community');
+  },
+
+  async getFollowingFeed() {
+    return this.request('/api/feed/following');
   }
 };
+
+// Generate random thumbnail
+function generateRandomThumbnail(title) {
+  const colors = [
+    '667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', 
+    '1abc9c', 'e67e22', '9b59b6', '2c3e50', '16a085', 'c0392b',
+    '8e44ad', 'd35400', '7f8c8d', '2ecc71', 'e84393', '6c5ce7'
+  ];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const encodedTitle = encodeURIComponent(title.substring(0, 20));
+  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&name=${encodedTitle}`;
+}
 
 // Auth functions
 async function register(username, email, password, confirm) {
@@ -128,6 +178,7 @@ async function login(username, password) {
 function logout() {
   if (isPlaying) stopPlayback();
   if (isRecording) stopAudioRecording();
+  if (metronomeInterval) clearInterval(metronomeInterval);
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
@@ -141,6 +192,45 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   location.reload();
+}
+
+// Play metronome click for recording sync
+function playMetronomeClick() {
+  if (!metronomeContext) {
+    metronomeContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  
+  const oscillator = metronomeContext.createOscillator();
+  const gain = metronomeContext.createGain();
+  
+  oscillator.connect(gain);
+  gain.connect(metronomeContext.destination);
+  
+  oscillator.frequency.value = 1000;
+  gain.gain.value = 0.3;
+  
+  oscillator.start();
+  gain.gain.exponentialRampToValueAtTime(0.00001, metronomeContext.currentTime + 0.1);
+  oscillator.stop(metronomeContext.currentTime + 0.1);
+}
+
+function startMetronome() {
+  if (metronomeInterval) clearInterval(metronomeInterval);
+  
+  const beatInterval = (60 / bpm) * 1000;
+  
+  metronomeInterval = setInterval(() => {
+    if (isRecording) {
+      playMetronomeClick();
+    }
+  }, beatInterval);
+}
+
+function stopMetronome() {
+  if (metronomeInterval) {
+    clearInterval(metronomeInterval);
+    metronomeInterval = null;
+  }
 }
 
 // Audio functions
@@ -218,6 +308,7 @@ async function startPlayback(recordMode = false) {
   }
   
   if (recordMode) {
+    startMetronome();
     await startAudioRecording();
   }
   
@@ -238,6 +329,7 @@ function pausePlayback() {
   
   if (isRecording) {
     stopAudioRecording();
+    stopMetronome();
   }
   
   for (const source of currentSources) {
@@ -261,6 +353,7 @@ function stopPlayback() {
   if (isPlaying) {
     if (isRecording) {
       stopAudioRecording();
+      stopMetronome();
     }
     pausePlayback();
   }
@@ -361,7 +454,7 @@ async function startAudioRecording() {
     isRecording = true;
     document.getElementById('record-btn').style.display = 'none';
     document.getElementById('stop-record-btn').style.display = 'inline-block';
-    document.getElementById('recording-status').innerHTML = '🔴 RECORDING - Playing all tracks while you record...';
+    document.getElementById('recording-status').innerHTML = '🔴 RECORDING - Follow the metronome click!';
     document.getElementById('recording-status').style.color = '#e74c3c';
     socket.emit('recording-started', { songId: currentSong.id, username: currentUser.username });
   } catch (error) {
@@ -422,6 +515,7 @@ async function startRecordingWithPlayback() {
 function stopRecordingAndPlayback() {
   if (isRecording) {
     stopAudioRecording();
+    stopMetronome();
   }
   if (isPlaying) {
     stopPlayback();
@@ -499,6 +593,10 @@ function setBpm(newBpm) {
   if (newBpm < 40) newBpm = 40;
   if (newBpm > 300) newBpm = 300;
   bpm = newBpm;
+  if (isRecording) {
+    stopMetronome();
+    startMetronome();
+  }
   socket.emit('transport-control', {
     songId: currentSong.id,
     action: 'setBpm',
@@ -506,35 +604,108 @@ function setBpm(newBpm) {
   });
 }
 
+// Feed Functions
+async function loadCommunityFeed() {
+  try {
+    const songs = await api.getCommunityFeed();
+    const container = document.getElementById('community-songs');
+    
+    if (songs.length === 0) {
+      container.innerHTML = '<div class="loading">No tracks yet. Create the first one!</div>';
+      return;
+    }
+    
+    container.innerHTML = songs.map(song => `
+      <div class="song-card" onclick="selectSong('${song.id}')">
+        <img class="song-thumbnail" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
+        <div class="song-info-card">
+          <div class="song-title">
+            ${escapeHtml(song.title)}
+            ${song.isNew ? '<span class="new-badge">NEW</span>' : ''}
+          </div>
+          <div class="song-creator">
+            <img class="creator-avatar-small" src="${song.creatorAvatar}" alt="">
+            ${escapeHtml(song.creator)}
+          </div>
+          <div class="song-stats">
+            <span>🎵 ${song.trackCount} tracks</span>
+            <span>👍 ${song.likes || 0} likes</span>
+            <span>🎧 ${song.totalContributors} contributors</span>
+            <span>🎚️ ${song.bpm} BPM</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Error loading community feed:', error);
+    document.getElementById('community-songs').innerHTML = '<div class="loading">Error loading feed</div>';
+  }
+}
+
+async function loadFollowingFeed() {
+  try {
+    const songs = await api.getFollowingFeed();
+    const container = document.getElementById('following-songs');
+    
+    if (songs.length === 0) {
+      container.innerHTML = '<div class="loading">No tracks from people you follow yet. Follow some creators!</div>';
+      return;
+    }
+    
+    container.innerHTML = songs.map(song => `
+      <div class="song-card" onclick="selectSong('${song.id}')">
+        <img class="song-thumbnail" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
+        <div class="song-info-card">
+          <div class="song-title">${escapeHtml(song.title)}</div>
+          <div class="song-creator">
+            <img class="creator-avatar-small" src="${song.creatorAvatar}" alt="">
+            ${escapeHtml(song.creator)}
+          </div>
+          <div class="song-stats">
+            <span>🎵 ${song.trackCount} tracks</span>
+            <span>👍 ${song.likes || 0} likes</span>
+            <span>🎧 ${song.totalContributors} contributors</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Error loading following feed:', error);
+    document.getElementById('following-songs').innerHTML = '<div class="loading">Error loading feed</div>';
+  }
+}
+
 async function loadSongs() {
   if (isRefreshing) return;
   try {
     const songs = await api.getSongs();
-    displaySongList(songs);
+    const container = document.getElementById('song-list');
+    
+    const userSongs = songs.filter(s => s.creator === currentUser.username);
+    
+    if (userSongs.length === 0) {
+      container.innerHTML = '<div class="loading">No tracks yet. Create your first track!</div>';
+      return;
+    }
+    
+    container.innerHTML = userSongs.map(song => `
+      <div class="song-card" onclick="selectSong('${song.id}')">
+        <img class="song-thumbnail" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
+        <div class="song-info-card">
+          <div class="song-title">${escapeHtml(song.title)}</div>
+          <div class="song-creator">by you</div>
+          <div class="song-stats">
+            <span>🎵 ${song.trackCount} tracks</span>
+            <span>👍 ${song.likes || 0} likes</span>
+            <span>🎧 ${song.totalContributors} contributors</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
   } catch (error) {
     console.error('Error loading songs:', error);
     setTimeout(() => loadSongs(), 2000);
   }
-}
-
-function displaySongList(songs) {
-  const container = document.getElementById('song-list');
-  if (songs.length === 0) {
-    container.innerHTML = '<div class="loading">No tracks yet. Create the first one!</div>';
-    return;
-  }
-  
-  container.innerHTML = songs.map(song => `
-    <div class="song-card ${song.isFeatured ? 'featured' : ''}" onclick="selectSong('${song.id}')">
-      <div class="song-title">${escapeHtml(song.title)} ${song.isFeatured ? '⭐' : ''}</div>
-      <div class="song-creator">by ${escapeHtml(song.creator)}</div>
-      <div class="song-stats">
-        <span>🎵 ${song.trackCount} tracks</span>
-        <span>👍 ${song.likes || 0} likes</span>
-        <span>🎧 ${song.totalContributors} contributors</span>
-      </div>
-    </div>
-  `).join('');
 }
 
 async function selectSong(songId) {
@@ -544,6 +715,7 @@ async function selectSong(songId) {
     
     if (isPlaying) stopPlayback();
     if (isRecording) stopAudioRecording();
+    if (metronomeInterval) clearInterval(metronomeInterval);
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
       mediaStream = null;
@@ -582,11 +754,10 @@ async function selectSong(songId) {
     currentPosition = 0;
     updatePositionDisplay(0);
     
-    // Switch to studio view
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelector('.nav-item[data-view="studio"]').classList.add('active');
-    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-    document.getElementById('studio-view').classList.add('active');
+    // Hide feed views, show studio
+    document.querySelectorAll('.feed-view').forEach(view => view.classList.remove('active'));
+    document.querySelector('.studio-view').classList.add('active');
+    document.querySelector('.feed-tabs').style.display = 'none';
     
   } catch (error) {
     console.error('Error loading song:', error);
@@ -701,37 +872,100 @@ async function toggleTrackFX(trackId, fxName) {
   }
 }
 
+// Create song with thumbnail
 async function createSong() {
   const title = document.getElementById('new-song-title').value;
-  let bpm = parseInt(document.getElementById('new-song-bpm').value);
+  let bpmVal = parseInt(document.getElementById('new-song-bpm').value);
   const genre = document.getElementById('new-song-genre').value;
   
   if (!title) {
     showToast('Please enter a song title');
     return;
   }
-  if (isNaN(bpm)) bpm = 120;
-  if (bpm < 40) bpm = 40;
-  if (bpm > 300) bpm = 300;
+  if (isNaN(bpmVal)) bpmVal = 120;
+  if (bpmVal < 40) bpmVal = 40;
+  if (bpmVal > 300) bpmVal = 300;
+  
+  const thumbnail = currentThumbnail || generateRandomThumbnail(title);
   
   try {
-    const newSong = await api.createSong({ title, bpm, genre });
+    const newSong = await api.createSong({ title, bpm: bpmVal, genre, thumbnail });
     showToast('Song created successfully!');
     document.getElementById('create-modal').style.display = 'none';
     document.getElementById('new-song-title').value = '';
     document.getElementById('new-song-bpm').value = '120';
-    await new Promise(resolve => setTimeout(resolve, 500));
+    currentThumbnail = null;
+    await loadCommunityFeed();
+    await loadSongs();
     await selectSong(newSong.id);
-    loadSongs();
   } catch (error) {
     console.error('Create song error:', error);
     showToast('Error creating song: ' + error.message);
   }
 }
 
+function randomizeThumbnail() {
+  const title = document.getElementById('new-song-title').value || 'track';
+  currentThumbnail = generateRandomThumbnail(title);
+  document.getElementById('preview-thumb').src = currentThumbnail;
+}
+
+// Profile functions
+async function openProfileModal() {
+  const modal = document.getElementById('profile-modal');
+  const avatar = document.getElementById('profile-modal-avatar');
+  const bio = document.getElementById('profile-bio');
+  
+  // Fetch fresh user data
+  const response = await fetch(`/api/users/${currentUser.username}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const user = await response.json();
+  
+  currentUser.followers = user.followers;
+  currentUser.following = user.following;
+  currentUser.contributedTo = user.contributedTo;
+  
+  avatar.src = user.avatar;
+  bio.value = user.bio || '';
+  
+  document.getElementById('profile-followers').textContent = user.followers?.length || 0;
+  document.getElementById('profile-following').textContent = user.following?.length || 0;
+  document.getElementById('profile-tracks').textContent = user.contributedTo?.length || 0;
+  
+  modal.style.display = 'flex';
+}
+
+async function saveProfile() {
+  const bio = document.getElementById('profile-bio').value;
+  
+  try {
+    await api.updateBio(bio);
+    currentUser.bio = bio;
+    showToast('Profile updated!');
+    document.getElementById('profile-modal').style.display = 'none';
+  } catch (error) {
+    showToast('Error updating profile: ' + error.message);
+  }
+}
+
+async function uploadAvatar(file) {
+  try {
+    const result = await api.uploadAvatar(file);
+    currentUser.avatar = result.avatar;
+    document.getElementById('header-avatar').src = result.avatar;
+    document.getElementById('profile-modal-avatar').src = result.avatar;
+    showToast('Avatar updated!');
+  } catch (error) {
+    showToast('Error uploading avatar: ' + error.message);
+  }
+}
+
+// Back to feed
 function backToLibrary() {
   if (isPlaying) stopPlayback();
   if (isRecording) stopAudioRecording();
+  if (metronomeInterval) clearInterval(metronomeInterval);
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
@@ -751,12 +985,15 @@ function backToLibrary() {
   isPlaying = false;
   currentPosition = 0;
   
-  // Switch to library view
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  document.querySelector('.nav-item[data-view="library"]').classList.add('active');
-  document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-  document.getElementById('library-view').classList.add('active');
+  document.querySelector('.studio-view').classList.remove('active');
+  document.querySelector('.feed-tabs').style.display = 'flex';
   
+  // Show active feed
+  const activeFeed = document.querySelector('.feed-tab.active').dataset.feed;
+  document.getElementById(`${activeFeed}-feed`).classList.add('active');
+  
+  loadCommunityFeed();
+  loadFollowingFeed();
   loadSongs();
 }
 
@@ -819,151 +1056,6 @@ async function uploadTrack() {
   }
 }
 
-// Profile functions
-async function loadProfile() {
-  const container = document.getElementById('profile-content');
-  if (!container) return;
-  
-  try {
-    const response = await fetch(`/api/users/${currentUser.username}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const user = await response.json();
-    
-    container.innerHTML = `
-      <div class="profile-header">
-        <img src="${user.avatar}" class="profile-avatar" alt="${user.username}">
-        <h2>${escapeHtml(user.username)}</h2>
-        <p class="profile-bio">${user.bio || 'Music creator on TrackStars'}</p>
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-number">${user.followers?.length || 0}</div>
-            <div class="stat-label">Followers</div>
-          </div>
-          <div class="stat">
-            <div class="stat-number">${user.following?.length || 0}</div>
-            <div class="stat-label">Following</div>
-          </div>
-          <div class="stat">
-            <div class="stat-number">${user.contributedTo?.length || 0}</div>
-            <div class="stat-label">Tracks</div>
-          </div>
-        </div>
-      </div>
-      <h3>My Tracks</h3>
-      <div class="song-grid" id="user-songs">
-        <div class="loading">Loading tracks...</div>
-      </div>
-    `;
-    
-    const songs = await api.getSongs();
-    const userSongs = songs.filter(s => s.creator === user.username || user.contributedTo?.includes(s.id));
-    const userSongsContainer = document.getElementById('user-songs');
-    if (userSongsContainer) {
-      userSongsContainer.innerHTML = userSongs.map(song => `
-        <div class="song-card" onclick="selectSong('${song.id}')">
-          <div class="song-title">${escapeHtml(song.title)}</div>
-          <div class="song-stats">🎵 ${song.trackCount} tracks | 👍 ${song.likes || 0}</div>
-        </div>
-      `).join('') || '<div class="loading">No tracks yet</div>';
-    }
-  } catch (error) {
-    console.error('Error loading profile:', error);
-    container.innerHTML = '<div class="loading">Error loading profile</div>';
-  }
-}
-
-// Messages functions
-async function loadMessages() {
-  const messagesList = document.getElementById('messages-list');
-  if (!messagesList) return;
-  
-  try {
-    const response = await fetch('/api/users', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const users = await response.json();
-    const otherUsers = users.filter(u => u.username !== currentUser.username);
-    
-    messagesList.innerHTML = `
-      <h3 style="margin-bottom: 16px;">Chat with Creators</h3>
-      <div class="song-grid" id="user-list">
-        ${otherUsers.map(user => `
-          <div class="song-card" onclick="selectUserToMessage('${user.username}')">
-            <div class="song-title">${escapeHtml(user.username)}</div>
-            <div class="song-creator">${user.followersCount} followers • Click to message</div>
-          </div>
-        `).join('') || '<div class="loading">No other users yet</div>'}
-      </div>
-    `;
-  } catch (error) {
-    console.error('Error loading users:', error);
-    messagesList.innerHTML = '<div class="loading">Error loading users</div>';
-  }
-}
-
-window.selectUserToMessage = async function(username) {
-  const messagesList = document.getElementById('messages-list');
-  if (!messagesList) return;
-  
-  messagesList.innerHTML = `
-    <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
-      <button class="back-btn" onclick="loadMessages()">← Back</button>
-      <h3>Chat with ${escapeHtml(username)}</h3>
-    </div>
-    <div id="chat-messages" style="flex: 1; overflow-y: auto; max-height: 60vh; margin-bottom: 16px;"></div>
-    <div class="message-input-area">
-      <input type="text" class="message-input" id="chat-input" placeholder="Type a message...">
-      <button class="send-btn" onclick="sendMessage('${username}')">Send</button>
-    </div>
-  `;
-  
-  try {
-    const response = await fetch(`/api/messages/${username}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const messages = await response.json();
-    
-    const chatMessages = document.getElementById('chat-messages');
-    if (chatMessages) {
-      chatMessages.innerHTML = messages.map(msg => `
-        <div class="message ${msg.from === currentUser.username ? 'sent' : 'received'}">
-          <div class="message-bubble">
-            <strong>${escapeHtml(msg.from)}</strong><br>
-            ${escapeHtml(msg.text)}
-            <div style="font-size: 10px; color: #888; margin-top: 4px;">${new Date(msg.timestamp).toLocaleTimeString()}</div>
-          </div>
-        </div>
-      `).join('');
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  } catch (error) {
-    console.error('Error loading messages:', error);
-  }
-};
-
-window.sendMessage = async function(to) {
-  const input = document.getElementById('chat-input');
-  const text = input?.value.trim();
-  if (!text) return;
-  
-  try {
-    const response = await fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, text })
-    });
-    
-    if (response.ok) {
-      input.value = '';
-      selectUserToMessage(to);
-    }
-  } catch (error) {
-    console.error('Error sending message:', error);
-    showToast('Error sending message');
-  }
-};
-
 // Socket functions
 function initSocket() {
   socket = io();
@@ -977,6 +1069,8 @@ function initSocket() {
       currentSong = await api.getSong(currentSong.id);
       displayTracks();
     }
+    loadCommunityFeed();
+    loadFollowingFeed();
   });
   
   socket.on('track-deleted', async (data) => {
@@ -985,6 +1079,8 @@ function initSocket() {
       displayTracks();
       showToast(`${data.username} deleted their track`);
     }
+    loadCommunityFeed();
+    loadFollowingFeed();
   });
   
   socket.on('track-updated', (data) => {
@@ -1019,10 +1115,9 @@ function initSocket() {
     showToast(`${data.username} is recording...`);
   });
   
-  socket.on('new-message', (message) => {
-    if (document.getElementById('chat-messages')) {
-      showToast(`New message from ${message.from}`);
-    }
+  socket.on('song-created', () => {
+    loadCommunityFeed();
+    loadFollowingFeed();
   });
 }
 
@@ -1047,23 +1142,284 @@ function showToast(message, duration = 3000) {
   }, duration);
 }
 
-// Navigation
-function initMobileNavigation() {
-  const navItems = document.querySelectorAll('.nav-item');
+// ============ SEARCH FUNCTIONS ============
+
+let currentSearchTerm = '';
+let currentSearchTab = 'all';
+
+async function performSearch(query, tab = 'all') {
+  if (!query || query.trim() === '') {
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '<div class="search-placeholder">🔍 Search for songs, artists, or genres...</div>';
+    return;
+  }
   
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const viewName = item.dataset.view;
+  try {
+    if (tab === 'all') {
+      const response = await fetch(`/api/search/all?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      displaySearchResults(data.songs, data.users);
+    } else if (tab === 'songs') {
+      const response = await fetch(`/api/search/songs?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const songs = await response.json();
+      displaySearchResults(songs, []);
+    } else if (tab === 'users') {
+      const response = await fetch(`/api/search/users?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const users = await response.json();
+      displaySearchResults([], users);
+    }
+  } catch (error) {
+    console.error('Search error:', error);
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '<div class="search-placeholder">❌ Error searching. Please try again.</div>';
+  }
+}
+
+function displaySearchResults(songs, users) {
+  const resultsContainer = document.getElementById('search-results');
+  
+  if ((!songs || songs.length === 0) && (!users || users.length === 0)) {
+    resultsContainer.innerHTML = '<div class="search-placeholder">😔 No results found. Try a different search term.</div>';
+    return;
+  }
+  
+  let html = '';
+  
+  // Songs section
+  if (songs && songs.length > 0) {
+    html += `
+      <div class="search-result-section">
+        <div class="search-section-title">🎵 Songs (${songs.length})</div>
+        ${songs.map(song => `
+          <div class="search-song-item" onclick="selectSong('${song.id}'); closeSearchModal();">
+            <img class="search-song-thumb" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
+            <div class="search-song-info">
+              <div class="search-song-title">${escapeHtml(song.title)}</div>
+              <div class="search-song-creator">
+                <img class="creator-avatar-small" src="${song.creatorAvatar}" alt="">
+                ${escapeHtml(song.creator)}
+              </div>
+              <div class="search-song-stats">
+                <span>🎵 ${song.trackCount} tracks</span>
+                <span>👍 ${song.likes} likes</span>
+                <span>🎚️ ${song.bpm} BPM</span>
+                <span>🎸 ${song.genre}</span>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  // Users section
+  if (users && users.length > 0) {
+    html += `
+      <div class="search-result-section">
+        <div class="search-section-title">👥 Users (${users.length})</div>
+        ${users.map(user => `
+          <div class="search-user-item">
+            <img class="search-user-avatar" src="${user.avatar}" alt="${escapeHtml(user.username)}">
+            <div class="search-user-info">
+              <div class="search-user-name">${escapeHtml(user.username)}</div>
+              <div class="search-user-bio">${escapeHtml(user.bio.substring(0, 60))}</div>
+              <div class="search-user-stats">
+                <span>👥 ${user.followersCount} followers</span>
+                <span>🎵 ${user.tracksCount} tracks</span>
+              </div>
+            </div>
+            <button class="search-follow-btn ${user.isFollowing ? 'following' : ''}" onclick="followFromSearch('${user.username}', this)">
+              ${user.isFollowing ? 'Following' : 'Follow'}
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  resultsContainer.innerHTML = html;
+}
+
+async function followFromSearch(username, buttonElement) {
+  try {
+    const result = await api.followUser(username);
+    if (result.following) {
+      buttonElement.textContent = 'Following';
+      buttonElement.classList.add('following');
+      showToast(`Now following ${username}`);
+    } else {
+      buttonElement.textContent = 'Follow';
+      buttonElement.classList.remove('following');
+      showToast(`Unfollowed ${username}`);
+    }
+    loadFollowingFeed();
+    performSearch(currentSearchTerm, currentSearchTab);
+    if (result.following) {
+      currentUser.following.push(username);
+    } else {
+      currentUser.following = currentUser.following.filter(u => u !== username);
+    }
+  } catch (error) {
+    showToast('Error: ' + error.message);
+  }
+}
+
+async function viewUserProfile(username) {
+  try {
+    const response = await fetch(`/api/users/${username}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const user = await response.json();
+    const isFollowing = currentUser.following?.includes(username) || false;
+    
+    const modal = document.getElementById('user-profile-modal');
+    const detailsContainer = document.getElementById('user-profile-details');
+    
+    detailsContainer.innerHTML = `
+      <div class="user-profile-detail">
+        <img class="view-profile-avatar" src="${user.avatar}" alt="${escapeHtml(user.username)}">
+        <div class="view-profile-name">${escapeHtml(user.username)}</div>
+        <div class="view-profile-bio">${escapeHtml(user.bio || 'Music creator on TrackStars')}</div>
+        <button class="view-profile-follow-btn ${isFollowing ? 'following' : ''}" onclick="followFromProfile('${user.username}', this)">
+          ${isFollowing ? 'Following' : 'Follow'}
+        </button>
+        <div class="view-profile-stats">
+          <div>
+            <div style="font-weight: bold; font-size: 20px;">${user.followers?.length || 0}</div>
+            <div style="font-size: 11px; color: #888;">Followers</div>
+          </div>
+          <div>
+            <div style="font-weight: bold; font-size: 20px;">${user.following?.length || 0}</div>
+            <div style="font-size: 11px; color: #888;">Following</div>
+          </div>
+          <div>
+            <div style="font-weight: bold; font-size: 20px;">${user.contributedTo?.length || 0}</div>
+            <div style="font-size: 11px; color: #888;">Tracks</div>
+          </div>
+        </div>
+        <div class="view-profile-tracks">
+          <h4>🎵 Contributed Tracks</h4>
+          <div id="profile-user-tracks"></div>
+        </div>
+      </div>
+    `;
+    
+    const songs = await api.getSongs();
+    const userSongs = songs.filter(s => user.contributedTo?.includes(s.id) || s.creator === username);
+    const tracksContainer = document.getElementById('profile-user-tracks');
+    
+    if (userSongs.length === 0) {
+      tracksContainer.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">No tracks yet</div>';
+    } else {
+      tracksContainer.innerHTML = userSongs.map(song => `
+        <div class="search-song-item" onclick="selectSong('${song.id}'); document.getElementById('user-profile-modal').style.display = 'none';">
+          <img class="search-song-thumb" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
+          <div class="search-song-info">
+            <div class="search-song-title">${escapeHtml(song.title)}</div>
+            <div class="search-song-stats">
+              <span>🎵 ${song.trackCount} tracks</span>
+              <span>👍 ${song.likes || 0} likes</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    modal.style.display = 'flex';
+  } catch (error) {
+    console.error('Error loading user profile:', error);
+    showToast('Error loading profile');
+  }
+}
+
+async function followFromProfile(username, buttonElement) {
+  try {
+    const result = await api.followUser(username);
+    if (result.following) {
+      buttonElement.textContent = 'Following';
+      buttonElement.classList.add('following');
+      showToast(`Now following ${username}`);
+    } else {
+      buttonElement.textContent = 'Follow';
+      buttonElement.classList.remove('following');
+      showToast(`Unfollowed ${username}`);
+    }
+    loadFollowingFeed();
+    if (result.following) {
+      currentUser.following.push(username);
+    } else {
+      currentUser.following = currentUser.following.filter(u => u !== username);
+    }
+  } catch (error) {
+    showToast('Error: ' + error.message);
+  }
+}
+
+function openSearchModal() {
+  const modal = document.getElementById('search-modal');
+  modal.style.display = 'flex';
+  document.getElementById('search-input').focus();
+  currentSearchTerm = '';
+  currentSearchTab = 'all';
+  document.getElementById('search-results').innerHTML = '<div class="search-placeholder">🔍 Search for songs, artists, or genres...</div>';
+}
+
+function closeSearchModal() {
+  document.getElementById('search-modal').style.display = 'none';
+  document.getElementById('search-input').value = '';
+}
+
+function initSearch() {
+  const searchInput = document.getElementById('search-input');
+  let debounceTimer;
+  
+  searchInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    currentSearchTerm = e.target.value;
+    debounceTimer = setTimeout(() => {
+      performSearch(currentSearchTerm, currentSearchTab);
+    }, 300);
+  });
+  
+  document.querySelectorAll('.search-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentSearchTab = tab.dataset.searchTab;
+      performSearch(currentSearchTerm, currentSearchTab);
+    });
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('search-modal').style.display === 'flex') {
+      closeSearchModal();
+    }
+  });
+}
+
+// Feed navigation
+function initFeedNavigation() {
+  const feedTabs = document.querySelectorAll('.feed-tab');
+  
+  feedTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const feedName = tab.dataset.feed;
       
-      navItems.forEach(nav => nav.classList.remove('active'));
-      item.classList.add('active');
+      feedTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
       
-      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-      document.getElementById(`${viewName}-view`).classList.add('active');
+      document.querySelectorAll('.feed-view').forEach(view => view.classList.remove('active'));
+      document.getElementById(`${feedName}-feed`).classList.add('active');
       
-      if (viewName === 'profile') loadProfile();
-      if (viewName === 'social') loadMessages();
-      if (viewName === 'library') loadSongs();
+      if (feedName === 'community') loadCommunityFeed();
+      if (feedName === 'following') loadFollowingFeed();
+      if (feedName === 'library') loadSongs();
     });
   });
 }
@@ -1093,9 +1449,12 @@ function setupEventListeners() {
       document.getElementById('auth-modal').style.display = 'none';
       document.getElementById('main-app').style.display = 'block';
       document.getElementById('current-user').textContent = currentUser.username;
+      document.getElementById('header-avatar').src = currentUser.avatar;
       initSocket();
+      loadCommunityFeed();
+      loadFollowingFeed();
       loadSongs();
-      initMobileNavigation();
+      initFeedNavigation();
     } catch (error) {
       errorDiv.textContent = error.message;
     }
@@ -1115,9 +1474,12 @@ function setupEventListeners() {
       document.getElementById('auth-modal').style.display = 'none';
       document.getElementById('main-app').style.display = 'block';
       document.getElementById('current-user').textContent = currentUser.username;
+      document.getElementById('header-avatar').src = currentUser.avatar;
       initSocket();
+      loadCommunityFeed();
+      loadFollowingFeed();
       loadSongs();
-      initMobileNavigation();
+      initFeedNavigation();
     } catch (error) {
       errorDiv.textContent = error.message;
     }
@@ -1126,14 +1488,33 @@ function setupEventListeners() {
   // Logout
   document.getElementById('logout-btn').addEventListener('click', logout);
   
+  // Profile click
+  document.getElementById('header-avatar').addEventListener('click', openProfileModal);
+  document.querySelector('.username').addEventListener('click', openProfileModal);
+  
+  // Profile modal
+  document.querySelector('.close-modal').addEventListener('click', () => {
+    document.getElementById('profile-modal').style.display = 'none';
+  });
+  document.getElementById('save-profile-btn').addEventListener('click', saveProfile);
+  document.getElementById('change-avatar-btn').addEventListener('click', () => {
+    document.getElementById('avatar-upload').click();
+  });
+  document.getElementById('avatar-upload').addEventListener('change', (e) => {
+    if (e.target.files[0]) uploadAvatar(e.target.files[0]);
+  });
+  
   // Create modal
   document.getElementById('open-create-modal').addEventListener('click', () => {
+    currentThumbnail = null;
+    document.getElementById('preview-thumb').src = '';
     document.getElementById('create-modal').style.display = 'flex';
   });
   document.getElementById('confirm-create').addEventListener('click', createSong);
   document.getElementById('cancel-create').addEventListener('click', () => {
     document.getElementById('create-modal').style.display = 'none';
   });
+  document.getElementById('randomize-thumb-btn').addEventListener('click', randomizeThumbnail);
   
   // Transport controls
   document.getElementById('play-btn').addEventListener('click', () => {
@@ -1166,11 +1547,34 @@ function setupEventListeners() {
   document.getElementById('audio-file').addEventListener('change', uploadTrack);
   document.getElementById('back-btn').addEventListener('click', backToLibrary);
   
+  // Search
+  document.getElementById('search-btn').addEventListener('click', openSearchModal);
+  document.getElementById('close-search').addEventListener('click', closeSearchModal);
+  document.querySelector('.close-user-profile').addEventListener('click', () => {
+    document.getElementById('user-profile-modal').style.display = 'none';
+  });
+  
+  const userProfileModal = document.getElementById('user-profile-modal');
+  userProfileModal.addEventListener('click', (e) => {
+    if (e.target === userProfileModal) {
+      userProfileModal.style.display = 'none';
+    }
+  });
+  
+  initSearch();
+  
   // Modal close on outside click
   const modal = document.getElementById('create-modal');
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       modal.style.display = 'none';
+    }
+  });
+  
+  const profileModal = document.getElementById('profile-modal');
+  profileModal.addEventListener('click', (e) => {
+    if (e.target === profileModal) {
+      profileModal.style.display = 'none';
     }
   });
 }
@@ -1186,9 +1590,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('auth-modal').style.display = 'none';
     document.getElementById('main-app').style.display = 'block';
     document.getElementById('current-user').textContent = currentUser.username;
+    document.getElementById('header-avatar').src = currentUser.avatar;
     initSocket();
+    loadCommunityFeed();
+    loadFollowingFeed();
     loadSongs();
-    initMobileNavigation();
+    initFeedNavigation();
     setupEventListeners();
   } else {
     document.getElementById('auth-modal').style.display = 'flex';
@@ -1204,7 +1611,7 @@ window.adjustVolume = adjustVolume;
 window.voteTrack = voteTrack;
 window.deleteTrack = deleteTrack;
 window.toggleTrackFX = toggleTrackFX;
-window.selectUserToMessage = selectUserToMessage;
-window.sendMessage = sendMessage;
-window.loadMessages = loadMessages;
-window.loadProfile = loadProfile;
+window.viewUserProfile = viewUserProfile;
+window.followFromProfile = followFromProfile;
+window.followFromSearch = followFromSearch;
+window.closeSearchModal = closeSearchModal;
