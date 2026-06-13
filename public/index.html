@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#0a0a12">
   <title>TrackStars - Collaborative DAW</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -47,169 +47,75 @@
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
-      <button class="nav-item active" data-view="library">
-        <span>🎵</span>
-        <span>Library</span>
-      </button>
-      <button class="nav-item" data-view="studio">
-        <span>🎛️</span>
-        <span>Studio</span>
-      </button>
-      <button class="nav-item" data-view="social">
-        <span>💬</span>
-        <span>Social</span>
-      </button>
-      <button class="nav-item" data-view="profile">
-        <span>👤</span>
-        <span>Profile</span>
-      </button>
+      <button class="nav-item active" data-view="library"><span>🎵</span><span>Library</span></button>
+      <button class="nav-item" data-view="studio"><span>🎛️</span><span>Studio</span></button>
+      <button class="nav-item" data-view="social"><span>💬</span><span>Chat</span></button>
+      <button class="nav-item" data-view="profile"><span>👤</span><span>Profile</span></button>
     </div>
 
     <!-- Library View -->
     <div id="library-view" class="view active">
-      <div class="feed-header">
+      <div class="section-header">
         <h3>📚 Song Library</h3>
-        <button class="create-btn" id="open-create-modal">+ Create New Track</button>
+        <button class="create-btn" id="open-create-modal">+ New Track</button>
       </div>
-      <div class="search-bar-container">
-        <input type="text" id="library-search" class="search-input-small" placeholder="🔍 Search songs...">
-      </div>
-      <div class="song-grid" id="song-list">
-        <div class="loading">Loading tracks...</div>
-      </div>
+      <input type="text" id="library-search" class="search-input" placeholder="🔍 Search songs or artists...">
+      <div class="song-grid" id="song-list"><div class="loading">Loading tracks...</div></div>
     </div>
 
     <!-- Studio View -->
     <div id="studio-view" class="view">
-      <div id="daw-area">
-        <div class="daw-header">
-          <div class="song-info">
-            <h2 id="current-song-title">Select a track</h2>
-            <p id="song-creator"></p>
-          </div>
-          <button class="back-btn" id="back-btn">← Back to Library</button>
+      <div class="studio-header">
+        <div><h2 id="current-song-title">Select a track</h2><p id="song-creator"></p></div>
+        <button class="back-btn" id="back-btn">← Back</button>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="play-btn">▶ Play</button>
+        <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
+        <div class="bpm-control"><span>BPM:</span><input type="number" id="bpm-input" value="120" min="40" max="300"></div>
+      </div>
+      <div class="position-display" id="position-display">00:00:00</div>
+      <div id="track-mixer"><div class="loading">Select a track to start</div></div>
+      <div class="recording-panel">
+        <div class="recording-controls">
+          <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+          <button class="record-btn" id="stop-record-btn" style="display:none">⏹️ Stop</button>
+          <button class="upload-btn" id="upload-btn">📁 Upload</button>
+          <input type="file" id="audio-file" accept="audio/*" style="display:none">
         </div>
-
-        <div class="transport">
-          <button class="play-btn" id="play-btn">▶ Play</button>
-          <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
-          <div class="bpm-control">
-            <span>BPM:</span>
-            <input type="number" id="bpm-input" value="120" min="40" max="300" step="1">
-          </div>
+        <div class="recording-settings">
+          <label class="toggle"><input type="checkbox" id="metronome-toggle" checked><span>🎵 Metronome</span></label>
+          <label class="toggle"><input type="checkbox" id="countin-toggle" checked><span>⏱️ Count-In (3 sec)</span></label>
         </div>
-        <div class="position-display" id="position-display">00:00:00</div>
-
-        <div id="track-mixer">
-          <div class="loading">Select a track to start</div>
-        </div>
-
-        <div class="recording-section">
-          <div class="recording-controls">
-            <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-            <button class="record-btn" id="stop-record-btn" style="display: none;">⏹️ Stop Recording</button>
-            <input type="file" id="audio-file" accept="audio/*" style="display: none;">
-            <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
-          </div>
-          
-          <div class="recording-settings">
-            <div class="setting-item">
-              <label class="switch">
-                <input type="checkbox" id="metronome-toggle" checked>
-                <span class="slider round"></span>
-              </label>
-              <span class="setting-label">🎵 Metronome</span>
-            </div>
-            <div class="setting-item">
-              <label class="switch">
-                <input type="checkbox" id="countin-toggle" checked>
-                <span class="slider round"></span>
-              </label>
-              <span class="setting-label">⏱️ 3-Second Count-In</span>
-            </div>
-          </div>
-          
-          <div id="countin-display" class="countin-display" style="display: none;">
-            <span id="countin-number" class="countin-number">3</span>
-            <div class="countin-progress">
-              <div id="countin-progress-bar" class="countin-progress-bar"></div>
-            </div>
-            <div class="countin-beat-indicator" id="countin-beat"></div>
-          </div>
-          
-          <div id="recording-status" class="recording-status"></div>
-          <div class="metronome-hint">🎵 Toggle metronome for perfect timing during recording</div>
-        </div>
+        <div id="countin-display" class="countin" style="display:none"><span id="countin-number">3</span><div class="progress"><div id="countin-bar"></div></div></div>
+        <div id="recording-status" class="status"></div>
       </div>
     </div>
 
-    <!-- Social View (Chat) -->
+    <!-- Social/Chat View -->
     <div id="social-view" class="view">
       <div class="chat-container">
-        <div class="chat-header">
-          <h3>💬 Messages</h3>
-        </div>
-        <div class="chat-users-list" id="chat-users-list">
-          <div class="loading">Loading users...</div>
-        </div>
-        <div class="chat-conversation" id="chat-conversation" style="display: none;">
-          <div class="chat-conversation-header">
-            <button class="back-to-users" id="back-to-users">← Back</button>
-            <span id="chat-with-user"></span>
-          </div>
+        <div class="chat-header"><h3>💬 Messages</h3></div>
+        <div class="chat-users" id="chat-users"><div class="loading">Loading users...</div></div>
+        <div class="chat-conversation" id="chat-conversation" style="display:none">
+          <div class="conv-header"><button id="back-to-users">← Back</button><span id="chat-with"></span></div>
           <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input-area">
-            <input type="text" id="chat-message-input" placeholder="Type a message..." class="chat-input">
-            <button class="send-chat-btn" id="send-chat-btn">Send</button>
-          </div>
+          <div class="chat-input"><input type="text" id="chat-input" placeholder="Type a message..."><button id="send-chat">Send</button></div>
         </div>
       </div>
     </div>
 
     <!-- Profile View -->
     <div id="profile-view" class="view">
-      <div id="profile-content">
-        <div class="loading">Loading profile...</div>
-      </div>
+      <div id="profile-content"><div class="loading">Loading profile...</div></div>
     </div>
 
-    <!-- Create Modal -->
-    <div id="create-modal" class="create-modal">
-      <div class="create-modal-content">
-        <h3>Create New Track</h3>
-        <input type="text" id="new-song-title" placeholder="Track Title" required>
-        <div>
-          <label>BPM:</label>
-          <input type="number" id="new-song-bpm" value="120" min="40" max="300">
-        </div>
-        <select id="new-song-genre">
-          <option value="Electronic">Electronic</option>
-          <option value="Hip Hop">Hip Hop</option>
-          <option value="Rock">Rock</option>
-          <option value="Pop">Pop</option>
-          <option value="Jazz">Jazz</option>
-          <option value="Ambient">Ambient</option>
-        </select>
-        <div class="thumbnail-preview">
-          <img id="preview-thumb" src="" alt="Thumbnail preview">
-          <button class="randomize-thumb-btn" id="randomize-thumb-btn">🎨 Randomize Thumbnail</button>
-        </div>
-        <div class="modal-buttons">
-          <button class="confirm-btn" id="confirm-create">Create</button>
-          <button class="cancel-btn" id="cancel-create">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- User Profile Modal -->
-    <div id="user-profile-modal" class="user-profile-modal">
-      <div class="user-profile-content">
-        <div class="user-profile-header">
-          <button class="close-user-profile">&times;</button>
-        </div>
-        <div id="user-profile-details"></div>
-      </div>
-    </div>
+    <!-- Modals -->
+    <div id="create-modal" class="modal-overlay"><div class="modal-card"><h3>Create New Track</h3><input type="text" id="new-title" placeholder="Track Title"><input type="number" id="new-bpm" value="120" min="40" max="300"><select id="new-genre"><option>Electronic</option><option>Hip Hop</option><option>Rock</option><option>Pop</option><option>Jazz</option><option>Ambient</option></select><div class="thumb-preview"><img id="thumb-preview"><button id="random-thumb">🎨 Randomize</button></div><div class="modal-buttons"><button id="confirm-create">Create</button><button id="cancel-create">Cancel</button></div></div></div>
+    
+    <div id="profile-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><h3>Edit Profile</h3><button class="close-modal">&times;</button></div><div class="avatar-section"><img id="edit-avatar"><button id="change-avatar">Change Avatar</button><input type="file" id="avatar-file" accept="image/*" style="display:none"></div><textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..."></textarea><div class="stats-row"><div><span id="edit-followers">0</span><label>Followers</label></div><div><span id="edit-following">0</span><label>Following</label></div><div><span id="edit-tracks">0</span><label>Tracks</label></div></div><button id="save-profile">Save Changes</button></div></div>
+    
+    <div id="user-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><button class="close-user-modal">&times;</button></div><div id="user-modal-content"></div></div></div>
   </div>
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
