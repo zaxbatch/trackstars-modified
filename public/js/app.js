@@ -39,7 +39,8 @@ const api = {
   getMessages: u => api.request(`/api/messages/${u}`),
   sendMessage: (to, text) => api.request('/api/messages', { method: 'POST', body: JSON.stringify({ to, text }) }),
   getUsers: () => api.request('/api/users'),
-  getUser: u => api.request(`/api/users/${u}`)
+  getUser: u => api.request(`/api/users/${u}`),
+  getPublicFeed: () => api.request('/api/feed/public')
 };
 
 // Auth
@@ -163,7 +164,7 @@ function scheduleTrack(track, offset, when = null) {
 async function startPlayback(recordMode = false) {
   if (!currentSong) return false;
   await initAudio();
-  if (recordMode && currentSong.tracks.some(t => t.username === currentUser.username)) { alert('You already have a track!'); return false; }
+  if (recordMode && currentSong.tracks.some(t => t.username === currentUser.username)) { showToast('You already have a track!'); return false; }
   await loadTracks();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
   isPlaying = true;
@@ -219,13 +220,14 @@ async function startRecording() {
       status.innerHTML = '📤 Uploading...';
       try {
         await api.uploadTrack(currentSong.id, file);
-        alert('Recording uploaded!');
+        showToast('Recording uploaded!');
         currentSong = await api.getSong(currentSong.id);
         displayTracks();
         status.innerHTML = '✅ Saved!';
         document.getElementById('record-btn').disabled = true;
         document.getElementById('upload-btn').disabled = true;
         setTimeout(() => status.innerHTML = '', 3000);
+        loadPublicFeed();
       } catch(e) { status.innerHTML = '❌ Upload failed'; }
       if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
       chunks = [];
@@ -236,7 +238,7 @@ async function startRecording() {
     document.getElementById('stop-record-btn').style.display = 'inline-block';
     document.getElementById('recording-status').innerHTML = '🔴 RECORDING';
     socket.emit('recording-started', { songId: currentSong.id, username: currentUser.username });
-  } catch(e) { alert('Microphone access denied'); }
+  } catch(e) { showToast('Microphone access denied'); }
 }
 
 function stopRecording() {
@@ -248,9 +250,9 @@ function stopRecording() {
 }
 
 async function startRecordingWithPlayback() {
-  if (!currentSong) return alert('Select a song first');
-  if (isRecording) return alert('Already recording');
-  if (currentSong.tracks.some(t => t.username === currentUser.username)) return alert('You already have a track');
+  if (!currentSong) return showToast('Select a song first');
+  if (isRecording) return showToast('Already recording');
+  if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track');
   if (isPlaying) stopPlayback();
   currentPos = 0;
   updateDisplay(0);
@@ -268,7 +270,84 @@ function updateDisplay(pos) {
   document.getElementById('position-display').textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}:${ms.toString().padStart(2,'0')}`;
 }
 
-// UI Functions
+// Public Feed Functions
+async function loadPublicFeed() {
+  try {
+    const feed = await api.getPublicFeed();
+    
+    // Display trending songs
+    const trendingContainer = document.getElementById('trending-songs');
+    if (feed.trendingSongs && feed.trendingSongs.length) {
+      trendingContainer.innerHTML = feed.trendingSongs.map(song => `
+        <div class="trending-card" onclick="selectSong('${song.id}')">
+          <img src="${song.thumbnail}" alt="${escape(song.title)}">
+          <div class="trending-info">
+            <div class="trending-title">${escape(song.title)}</div>
+            <div class="trending-creator" onclick="event.stopPropagation(); viewUser('${song.creator}')">${escape(song.creator)}</div>
+            <div class="trending-stats">👍 ${song.likes} likes • 🎵 ${song.trackCount} tracks</div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      trendingContainer.innerHTML = '<div class="loading">No trending tracks yet</div>';
+    }
+    
+    // Display recent songs
+    const recentContainer = document.getElementById('recent-songs');
+    if (feed.recentSongs && feed.recentSongs.length) {
+      recentContainer.innerHTML = feed.recentSongs.map(song => `
+        <div class="song-card" onclick="selectSong('${song.id}')">
+          <img class="song-thumb" src="${song.thumbnail}" alt="${escape(song.title)}">
+          <div class="song-info">
+            <div class="song-title">${escape(song.title)} ${song.isNew ? '<span class="new-badge">NEW</span>' : ''}</div>
+            <div class="song-creator" onclick="event.stopPropagation(); viewUser('${song.creator}')">${escape(song.creator)}</div>
+            <div class="song-stats">🎵 ${song.trackCount} tracks | 👍 ${song.likes} likes | 🎚️ ${song.bpm} BPM</div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      recentContainer.innerHTML = '<div class="loading">No recent tracks yet</div>';
+    }
+    
+    // Display new users
+    const usersContainer = document.getElementById('new-users');
+    if (feed.recentUsers && feed.recentUsers.length) {
+      usersContainer.innerHTML = feed.recentUsers.map(user => `
+        <div class="user-card">
+          <img class="user-avatar" src="${user.avatar}" alt="${escape(user.username)}" onclick="viewUser('${user.username}')">
+          <div class="user-info">
+            <div class="user-name" onclick="viewUser('${user.username}')">${escape(user.username)} ${user.isNew ? '<span class="new-badge">NEW</span>' : ''}</div>
+            <div class="user-bio">${escape(user.bio.substring(0, 50))}</div>
+            <div class="user-stats">👥 ${user.followersCount} followers • 🎵 ${user.tracksCount} tracks</div>
+          </div>
+          <button class="follow-small-btn ${user.isFollowing ? 'following' : ''}" onclick="followFromFeed('${user.username}', this)">${user.isFollowing ? 'Following' : 'Follow'}</button>
+        </div>
+      `).join('');
+    } else {
+      usersContainer.innerHTML = '<div class="loading">No new creators yet</div>';
+    }
+  } catch(e) { console.error('Error loading feed:', e); }
+}
+
+async function followFromFeed(username, btn) {
+  try {
+    const res = await api.followUser(username);
+    if (res.following) {
+      btn.textContent = 'Following';
+      btn.classList.add('following');
+      showToast(`Following ${username}`);
+      if (!currentUser.following.includes(username)) currentUser.following.push(username);
+    } else {
+      btn.textContent = 'Follow';
+      btn.classList.remove('following');
+      showToast(`Unfollowed ${username}`);
+      currentUser.following = currentUser.following.filter(u => u !== username);
+    }
+    loadPublicFeed();
+  } catch(e) { showToast('Error following user'); }
+}
+
+// Library Functions
 async function loadSongs() {
   try {
     const songs = await api.getSongs();
@@ -321,7 +400,7 @@ async function selectSong(id) {
     document.querySelector('.nav-item[data-view="studio"]').classList.add('active');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('studio-view').classList.add('active');
-  } catch(e) { alert('Error loading song'); }
+  } catch(e) { showToast('Error loading song'); }
 }
 
 function displayTracks() {
@@ -373,7 +452,8 @@ async function voteTrack(id, vote) {
     const track = currentSong.tracks.find(t => t.id === id);
     if (track) track.votes = res.votes;
     displayTracks();
-  } catch(e) { alert('Error voting'); }
+    loadPublicFeed();
+  } catch(e) { showToast('Error voting'); }
 }
 
 async function deleteTrack(id) {
@@ -383,32 +463,36 @@ async function deleteTrack(id) {
   displayTracks();
   document.getElementById('record-btn').disabled = false;
   document.getElementById('upload-btn').disabled = false;
+  loadPublicFeed();
+  loadSongs();
 }
 
 async function createSong() {
   const title = document.getElementById('new-title').value;
   let b = parseInt(document.getElementById('new-bpm').value);
   const genre = document.getElementById('new-genre').value;
-  if (!title) return alert('Enter a title');
+  if (!title) return showToast('Enter a title');
   b = Math.min(300, Math.max(40, b || 120));
   const song = await api.createSong({ title, bpm: b, genre });
-  alert('Song created!');
+  showToast('Song created!');
   document.getElementById('create-modal').style.display = 'none';
   document.getElementById('new-title').value = '';
   loadSongs();
+  loadPublicFeed();
   selectSong(song.id);
 }
 
 async function uploadTrackFile() {
   const file = document.getElementById('audio-file').files[0];
-  if (!file) return alert('Select a file');
-  if (currentSong.tracks.some(t => t.username === currentUser.username)) return alert('You already have a track');
+  if (!file) return showToast('Select a file');
+  if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track');
   await api.uploadTrack(currentSong.id, file);
-  alert('Track uploaded!');
+  showToast('Track uploaded!');
   currentSong = await api.getSong(currentSong.id);
   displayTracks();
   document.getElementById('record-btn').disabled = true;
   document.getElementById('upload-btn').disabled = true;
+  loadPublicFeed();
 }
 
 function backToLibrary() {
@@ -462,7 +546,7 @@ async function openProfileModal() {
 async function saveProfile() {
   const bio = document.getElementById('edit-bio').value;
   await api.updateBio(bio);
-  alert('Profile updated');
+  showToast('Profile updated');
   document.getElementById('profile-modal').style.display = 'none';
   loadProfile();
 }
@@ -471,7 +555,7 @@ async function uploadAvatar(file) {
   const res = await api.uploadAvatar(file);
   currentUser.avatar = res.avatar;
   document.getElementById('header-avatar').src = res.avatar;
-  alert('Avatar updated');
+  showToast('Avatar updated');
 }
 
 // Chat
@@ -539,27 +623,28 @@ async function viewUser(username) {
     if (!userSongs.length) tracksDiv.innerHTML = '<div style="color:#888;text-align:center">No tracks yet</div>';
     else tracksDiv.innerHTML = userSongs.map(s => `<div class="song-card" onclick="selectSong('${s.id}'); document.getElementById('user-modal').style.display = 'none';"><img class="song-thumb" src="${s.thumbnail}"><div class="song-info"><div class="song-title">${escape(s.title)}</div><div class="song-stats">🎵 ${s.trackCount} tracks</div></div></div>`).join('');
     modal.style.display = 'flex';
-  } catch(e) { alert('Error loading profile'); }
+  } catch(e) { showToast('Error loading profile'); }
 }
 
 async function followUser(username, btn) {
   const res = await api.followUser(username);
-  if (res.following) { btn.textContent = 'Following'; btn.classList.add('following'); }
-  else { btn.textContent = 'Follow'; btn.classList.remove('following'); }
+  if (res.following) { btn.textContent = 'Following'; btn.classList.add('following'); showToast(`Following ${username}`); }
+  else { btn.textContent = 'Follow'; btn.classList.remove('following'); showToast(`Unfollowed ${username}`); }
   if (res.following && !currentUser.following.includes(username)) currentUser.following.push(username);
   else if (!res.following) currentUser.following = currentUser.following.filter(u => u !== username);
+  loadPublicFeed();
 }
 
 // Socket
 function initSocket() {
   socket = io();
   socket.on('connect', () => console.log('Socket connected'));
-  socket.on('track-added', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); });
-  socket.on('track-deleted', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); });
+  socket.on('track-added', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadPublicFeed(); });
+  socket.on('track-deleted', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadPublicFeed(); });
   socket.on('track-updated', data => { if (currentSong) { const t = currentSong.tracks.find(tr => tr.id === data.trackId); if (t && data.updates) { if (data.updates.muted !== undefined) t.muted = data.updates.muted; if (data.updates.volume !== undefined) t.volume = data.updates.volume; displayTracks(); } } });
   socket.on('transport-state', state => { if (state.bpm && state.bpm !== bpm && currentSong) { bpm = state.bpm; document.getElementById('bpm-input').value = bpm; } });
-  socket.on('user-recording', data => alert(`${data.username} is recording...`));
-  socket.on('new-message', msg => { if (currentChatUser === msg.from) loadConversation(msg.from); alert(`New message from ${msg.from}`); });
+  socket.on('user-recording', data => showToast(`${data.username} is recording...`));
+  socket.on('new-message', msg => { if (currentChatUser === msg.from) loadConversation(msg.from); showToast(`New message from ${msg.from}`); });
   socket.emit('join-chat', currentUser.username);
 }
 
@@ -575,9 +660,14 @@ function initNav() {
       if (view === 'profile') loadProfile();
       if (view === 'social') loadChatUsers();
       if (view === 'library') loadSongs();
+      if (view === 'feed') loadPublicFeed();
     };
   });
 }
+
+// Utility
+function escape(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function showToast(msg, duration = 3000) { let toast = document.querySelector('.toast'); if (toast) toast.remove(); toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; document.body.appendChild(toast); setTimeout(() => toast.remove(), duration); }
 
 // Event Listeners
 function setupListeners() {
@@ -595,7 +685,7 @@ function setupListeners() {
       document.getElementById('main-app').style.display = 'block';
       document.getElementById('current-user').textContent = currentUser.username;
       document.getElementById('header-avatar').src = currentUser.avatar;
-      initSocket(); loadSongs(); initNav();
+      initSocket(); loadSongs(); loadPublicFeed(); initNav();
     } catch(err) { document.getElementById('login-error').textContent = err.message; }
   };
   document.getElementById('register-form').onsubmit = async e => {
@@ -605,7 +695,7 @@ function setupListeners() {
       document.getElementById('main-app').style.display = 'block';
       document.getElementById('current-user').textContent = currentUser.username;
       document.getElementById('header-avatar').src = currentUser.avatar;
-      initSocket(); loadSongs(); initNav();
+      initSocket(); loadSongs(); loadPublicFeed(); initNav();
     } catch(err) { document.getElementById('register-error').textContent = err.message; }
   };
   document.getElementById('logout-btn').onclick = logout;
@@ -644,8 +734,6 @@ function setBpm(newBpm) {
   socket.emit('transport-control', { songId: currentSong?.id, action: 'setBpm', bpm });
 }
 
-function escape(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   const savedToken = localStorage.getItem('token');
@@ -659,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('header-avatar').src = currentUser.avatar;
     initSocket();
     loadSongs();
+    loadPublicFeed();
     initNav();
     setupListeners();
   } else {
@@ -677,3 +766,4 @@ window.deleteTrack = deleteTrack;
 window.viewUser = viewUser;
 window.followUser = followUser;
 window.startChat = startChat;
+window.followFromFeed = followFromFeed;

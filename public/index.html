@@ -47,14 +47,47 @@
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
-      <button class="nav-item active" data-view="library"><span>🎵</span><span>Library</span></button>
+      <button class="nav-item active" data-view="feed"><span>🔥</span><span>Feed</span></button>
+      <button class="nav-item" data-view="library"><span>🎵</span><span>Library</span></button>
       <button class="nav-item" data-view="studio"><span>🎛️</span><span>Studio</span></button>
       <button class="nav-item" data-view="social"><span>💬</span><span>Chat</span></button>
       <button class="nav-item" data-view="profile"><span>👤</span><span>Profile</span></button>
     </div>
 
+    <!-- Feed View (Public Feed) -->
+    <div id="feed-view" class="view active">
+      <div class="feed-header">
+        <h3>🔥 Public Feed</h3>
+        <p>Discover new beats and trending creators</p>
+      </div>
+      
+      <!-- Trending Section -->
+      <div class="feed-section">
+        <div class="section-title">📈 Trending This Week</div>
+        <div id="trending-songs" class="horizontal-scroll">
+          <div class="loading">Loading trending...</div>
+        </div>
+      </div>
+      
+      <!-- Recent Beats Section -->
+      <div class="feed-section">
+        <div class="section-title">🆕 Recent Beats</div>
+        <div id="recent-songs" class="song-grid">
+          <div class="loading">Loading recent beats...</div>
+        </div>
+      </div>
+      
+      <!-- New Users Section -->
+      <div class="feed-section">
+        <div class="section-title">✨ New Creators</div>
+        <div id="new-users" class="users-grid">
+          <div class="loading">Loading new creators...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Library View -->
-    <div id="library-view" class="view active">
+    <div id="library-view" class="view">
       <div class="section-header">
         <h3>📚 Song Library</h3>
         <button class="create-btn" id="open-create-modal">+ New Track</button>

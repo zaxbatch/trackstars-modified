@@ -185,6 +185,72 @@ app.post('/api/messages', authenticateToken, (req, res) => {
   res.json(msg);
 });
 
+// ============ FEED ROUTES ============
+app.get('/api/feed/public', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const users = readData(dataFiles.users);
+  const currentUsername = req.user.username;
+  
+  // Get recent songs (last 30 days)
+  const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  const recentSongs = Object.values(songs)
+    .filter(song => song.createdAt > oneMonthAgo)
+    .map(song => ({
+      id: song.id,
+      title: song.title,
+      creator: song.creator,
+      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
+      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+      bpm: song.bpm || 120,
+      trackCount: song.tracks?.length || 0,
+      likes: song.likes || 0,
+      createdAt: song.createdAt,
+      genre: song.genre || 'Electronic',
+      isNew: (Date.now() - song.createdAt) < 7 * 24 * 60 * 60 * 1000,
+      type: 'song'
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 20);
+  
+  // Get recent users (last 30 days)
+  const recentUsers = Object.values(users)
+    .filter(user => user.createdAt > oneMonthAgo && user.username !== currentUsername)
+    .map(user => ({
+      username: user.username,
+      avatar: user.avatar,
+      bio: user.bio || 'New on TrackStars!',
+      followersCount: user.followers?.length || 0,
+      tracksCount: user.contributedTo?.length || 0,
+      createdAt: user.createdAt,
+      isNew: (Date.now() - user.createdAt) < 7 * 24 * 60 * 60 * 1000,
+      isFollowing: (user.followers || []).includes(currentUsername),
+      type: 'user'
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 10);
+  
+  // Get trending songs (most likes in last 7 days)
+  const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const trendingSongs = Object.values(songs)
+    .filter(song => song.createdAt > oneWeekAgo)
+    .map(song => ({
+      id: song.id,
+      title: song.title,
+      creator: song.creator,
+      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
+      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
+      trackCount: song.tracks?.length || 0,
+      likes: song.likes || 0,
+      createdAt: song.createdAt,
+      genre: song.genre || 'Electronic',
+      type: 'song'
+    }))
+    .sort((a, b) => b.likes - a.likes)
+    .slice(0, 10);
+  
+  res.json({ recentSongs, recentUsers, trendingSongs });
+});
+
 // ============ SONGS ============
 app.get('/api/songs', (req, res) => {
   const songs = readData(dataFiles.songs);
