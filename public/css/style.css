@@ -13,7 +13,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ============ AUTH MODAL ============ */
+/* Auth Modal */
 .modal {
   position: fixed;
   top: 0;
@@ -103,11 +103,6 @@ body {
   margin-top: 20px;
 }
 
-.auth-form button:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
 .error-message {
   color: #e74c3c;
   font-size: 13px;
@@ -115,13 +110,11 @@ body {
   text-align: center;
 }
 
-/* ============ MAIN APP ============ */
 #main-app {
   display: none;
   min-height: 100vh;
 }
 
-/* ============ HEADER ============ */
 .header {
   display: flex;
   justify-content: space-between;
@@ -164,18 +157,10 @@ body {
   transition: transform 0.2s;
 }
 
-.header-avatar:hover {
-  transform: scale(1.05);
-}
-
 .username {
   font-size: 14px;
   cursor: pointer;
   font-weight: 500;
-}
-
-.username:hover {
-  color: #667eea;
 }
 
 .logout-btn {
@@ -186,15 +171,8 @@ body {
   border-radius: 20px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
 }
 
-.logout-btn:hover {
-  background: #c0392b;
-  transform: scale(1.02);
-}
-
-/* ============ SEARCH BUTTON ============ */
 .search-btn {
   background: none;
   border: none;
@@ -202,15 +180,9 @@ body {
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
-  transition: all 0.2s;
 }
 
-.search-btn:hover {
-  background: #2d2d3f;
-  transform: scale(1.05);
-}
-
-/* ============ SEARCH MODAL ============ */
+/* Search Modal */
 .search-modal {
   display: none;
   position: fixed;
@@ -249,11 +221,6 @@ body {
   font-size: 16px;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 .close-search {
   background: #2d2d3f;
   border: none;
@@ -262,14 +229,8 @@ body {
   cursor: pointer;
   width: 48px;
   border-radius: 30px;
-  transition: all 0.2s;
 }
 
-.close-search:hover {
-  background: #e74c3c;
-}
-
-/* Search Tabs */
 .search-tabs {
   display: flex;
   gap: 12px;
@@ -287,7 +248,6 @@ body {
   cursor: pointer;
   padding: 8px 16px;
   border-radius: 20px;
-  transition: all 0.2s;
 }
 
 .search-tab.active {
@@ -295,11 +255,6 @@ body {
   background: rgba(102, 126, 234, 0.1);
 }
 
-.search-tab:hover {
-  color: #667eea;
-}
-
-/* Search Results */
 .search-results {
   flex: 1;
   overflow-y: auto;
@@ -324,7 +279,6 @@ body {
   border-bottom: 1px solid #2d2d3f;
 }
 
-/* Search Song Items */
 .search-song-item {
   display: flex;
   gap: 12px;
@@ -338,7 +292,6 @@ body {
 
 .search-song-item:hover {
   background: #2d2d3f;
-  transform: translateX(5px);
 }
 
 .search-song-thumb {
@@ -364,6 +317,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+}
+
+.search-song-creator:hover {
+  color: #667eea;
 }
 
 .creator-avatar-small {
@@ -381,7 +339,6 @@ body {
   margin-top: 4px;
 }
 
-/* Search User Items */
 .search-user-item {
   display: flex;
   align-items: center;
@@ -390,11 +347,6 @@ body {
   background: #1a1a2e;
   border-radius: 12px;
   margin-bottom: 8px;
-  transition: all 0.2s;
-}
-
-.search-user-item:hover {
-  background: #2d2d3f;
 }
 
 .search-user-avatar {
@@ -402,6 +354,7 @@ body {
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
+  cursor: pointer;
 }
 
 .search-user-info {
@@ -412,6 +365,11 @@ body {
   font-weight: bold;
   font-size: 14px;
   margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.search-user-name:hover {
+  color: #667eea;
 }
 
 .search-user-bio {
@@ -427,7 +385,7 @@ body {
   color: #667eea;
 }
 
-.search-follow-btn {
+.search-follow-btn, .search-chat-btn {
   padding: 6px 16px;
   background: #667eea;
   border: none;
@@ -435,12 +393,6 @@ body {
   color: white;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
-}
-
-.search-follow-btn:hover {
-  transform: scale(1.02);
-  opacity: 0.9;
 }
 
 .search-follow-btn.following {
@@ -448,7 +400,11 @@ body {
   color: #888;
 }
 
-/* ============ FEED TABS ============ */
+.search-chat-btn {
+  background: #3498db;
+}
+
+/* Feed Tabs */
 .feed-tabs {
   display: flex;
   background: #1a1a2e;
@@ -467,7 +423,6 @@ body {
   font-size: 14px;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s;
 }
 
 .feed-tab.active {
@@ -475,11 +430,6 @@ body {
   border-bottom: 2px solid #667eea;
 }
 
-.feed-tab:hover {
-  color: #667eea;
-}
-
-/* ============ FEED VIEWS ============ */
 .feed-view {
   display: none;
   padding: 16px;
@@ -503,7 +453,6 @@ body {
   color: #888;
 }
 
-/* ============ STUDIO VIEW ============ */
 .studio-view {
   display: none;
   padding: 16px;
@@ -514,7 +463,6 @@ body {
   display: block;
 }
 
-/* ============ SONG CARDS ============ */
 .song-grid {
   display: flex;
   flex-direction: column;
@@ -526,18 +474,8 @@ body {
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s;
   border: 1px solid #2d2d3f;
   display: flex;
-}
-
-.song-card:hover {
-  transform: translateY(-2px);
-  border-color: #667eea;
-}
-
-.song-card:active {
-  transform: scale(0.98);
 }
 
 .song-thumbnail {
@@ -555,9 +493,6 @@ body {
   font-weight: bold;
   font-size: 16px;
   margin-bottom: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .song-creator {
@@ -567,6 +502,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+}
+
+.song-creator:hover {
+  color: #667eea;
 }
 
 .song-stats {
@@ -584,7 +524,6 @@ body {
   border-radius: 12px;
 }
 
-/* ============ CREATE BUTTON ============ */
 .create-btn {
   width: 100%;
   padding: 14px;
@@ -595,15 +534,8 @@ body {
   font-weight: bold;
   margin-bottom: 16px;
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.create-btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
-}
-
-/* ============ DAW AREA ============ */
 .daw-header {
   display: flex;
   justify-content: space-between;
@@ -630,14 +562,8 @@ body {
   border-radius: 12px;
   color: #fff;
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.back-btn:hover {
-  background: #3d3d5f;
-}
-
-/* ============ TRANSPORT CONTROLS ============ */
 .transport {
   display: flex;
   flex-wrap: wrap;
@@ -653,11 +579,6 @@ body {
   border: none;
   border-radius: 40px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.transport button:hover {
-  transform: scale(1.02);
 }
 
 .play-btn { background: #27ae60; color: white; }
@@ -683,35 +604,23 @@ body {
   text-align: center;
 }
 
-.bpm-control input:focus {
-  outline: none;
-  border: 1px solid #667eea;
-}
-
 .position-display {
   font-family: monospace;
   font-size: 24px;
   font-weight: bold;
   text-align: center;
   margin-bottom: 20px;
-  letter-spacing: 2px;
   background: #1a1a2e;
   padding: 12px;
   border-radius: 12px;
 }
 
-/* ============ TRACK CARDS ============ */
 .track-card {
   background: #1a1a2e;
   border-radius: 16px;
   padding: 14px;
   margin-bottom: 12px;
   border: 1px solid #2d2d3f;
-  transition: all 0.2s;
-}
-
-.track-card:hover {
-  border-color: #667eea;
 }
 
 .track-card.muted {
@@ -735,6 +644,11 @@ body {
 .track-creator {
   font-size: 11px;
   color: #888;
+  cursor: pointer;
+}
+
+.track-creator:hover {
+  color: #667eea;
 }
 
 .your-track {
@@ -756,11 +670,6 @@ body {
   border-radius: 20px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
-}
-
-.track-controls button:hover {
-  transform: scale(1.02);
 }
 
 .mute-btn { background: #e74c3c; color: white; }
@@ -772,20 +681,8 @@ body {
 .volume-slider {
   width: 100px;
   cursor: pointer;
-  height: 4px;
-  border-radius: 5px;
-  background: #2d2d3f;
 }
 
-.volume-slider::-webkit-slider-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #667eea;
-  cursor: pointer;
-}
-
-/* ============ FX SECTION ============ */
 .fx-section {
   margin-top: 12px;
   padding-top: 12px;
@@ -803,18 +700,12 @@ body {
   color: #fff;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
-}
-
-.fx-btn:hover {
-  transform: scale(1.02);
 }
 
 .fx-btn.active {
   background: #667eea;
 }
 
-/* ============ RECORDING SECTION ============ */
 .recording-section {
   background: #1a1a2e;
   border-radius: 16px;
@@ -836,16 +727,6 @@ body {
   border-radius: 40px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 0.2s;
-}
-
-.record-btn:hover:not(:disabled) {
-  transform: scale(1.02);
-}
-
-.record-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .upload-btn {
@@ -856,19 +737,8 @@ body {
   border-radius: 40px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 0.2s;
 }
 
-.upload-btn:hover:not(:disabled) {
-  transform: scale(1.02);
-}
-
-.upload-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Recording Settings */
 .recording-settings {
   display: flex;
   gap: 24px;
@@ -889,7 +759,6 @@ body {
   color: #ccc;
 }
 
-/* Toggle Switch */
 .switch {
   position: relative;
   display: inline-block;
@@ -941,14 +810,12 @@ input:checked + .slider:before {
   border-radius: 50%;
 }
 
-/* Count-in Display */
 .countin-display {
   text-align: center;
   margin: 16px 0;
   padding: 16px;
   background: #1a1a2e;
   border-radius: 16px;
-  animation: pulse 1s infinite;
 }
 
 .countin-number {
@@ -974,15 +841,9 @@ input:checked + .slider:before {
   transition: width 0.1s linear;
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.02);
-  }
+.countin-beat-indicator {
+  margin-top: 12px;
+  font-size: 20px;
 }
 
 .recording-status {
@@ -995,13 +856,10 @@ input:checked + .slider:before {
   font-size: 11px;
   color: #888;
   text-align: center;
-  padding: 8px;
-  background: #1a1a2e;
-  border-radius: 8px;
 }
 
-/* ============ PROFILE MODAL ============ */
-.profile-modal {
+/* Profile Modal */
+.profile-modal, .user-profile-modal, .chat-modal {
   display: none;
   position: fixed;
   top: 0;
@@ -1014,7 +872,7 @@ input:checked + .slider:before {
   z-index: 1000;
 }
 
-.profile-modal-content {
+.profile-modal-content, .user-profile-content, .chat-modal-content {
   background: #1a1a2e;
   border-radius: 24px;
   width: 90%;
@@ -1031,21 +889,12 @@ input:checked + .slider:before {
   border-bottom: 1px solid #2d2d3f;
 }
 
-.profile-modal-header h3 {
-  font-size: 18px;
-}
-
-.close-modal {
+.close-modal, .close-user-profile, .close-chat {
   background: none;
   border: none;
   color: #888;
   font-size: 24px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-modal:hover {
-  color: #e74c3c;
 }
 
 .profile-avatar-section {
@@ -1053,7 +902,7 @@ input:checked + .slider:before {
   padding: 20px;
 }
 
-.profile-modal-avatar {
+.profile-modal-avatar, .view-profile-avatar {
   width: 100px;
   height: 100px;
   border-radius: 50%;
@@ -1071,12 +920,6 @@ input:checked + .slider:before {
   border-radius: 12px;
   color: white;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.change-avatar-btn:hover {
-  background: #3d3d5f;
 }
 
 .profile-bio-section {
@@ -1101,21 +944,12 @@ input:checked + .slider:before {
   resize: vertical;
 }
 
-.profile-bio-section textarea:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 .profile-stats {
   display: flex;
   justify-content: space-around;
   padding: 20px;
   border-top: 1px solid #2d2d3f;
   border-bottom: 1px solid #2d2d3f;
-}
-
-.profile-stats .stat {
-  text-align: center;
 }
 
 .stat-value {
@@ -1130,7 +964,7 @@ input:checked + .slider:before {
   color: #888;
 }
 
-.save-profile-btn {
+.save-profile-btn, .view-profile-follow-btn {
   width: calc(100% - 40px);
   margin: 20px;
   padding: 14px;
@@ -1140,15 +974,13 @@ input:checked + .slider:before {
   color: white;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.save-profile-btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
+.view-profile-follow-btn.following {
+  background: #2d2d3f;
+  color: #888;
 }
 
-/* ============ CREATE MODAL ============ */
 .create-modal {
   display: none;
   position: fixed;
@@ -1170,13 +1002,7 @@ input:checked + .slider:before {
   max-width: 350px;
 }
 
-.create-modal-content h3 {
-  margin-bottom: 16px;
-  text-align: center;
-}
-
-.create-modal-content input,
-.create-modal-content select {
+.create-modal-content input, .create-modal-content select {
   width: 100%;
   padding: 12px;
   margin: 8px 0;
@@ -1184,17 +1010,6 @@ input:checked + .slider:before {
   border: none;
   border-radius: 12px;
   color: white;
-}
-
-.create-modal-content input:focus,
-.create-modal-content select:focus {
-  outline: none;
-  border: 1px solid #667eea;
-}
-
-.create-modal-content label {
-  font-size: 12px;
-  color: #888;
 }
 
 .thumbnail-preview {
@@ -1207,7 +1022,6 @@ input:checked + .slider:before {
   height: 80px;
   border-radius: 12px;
   object-fit: cover;
-  margin-bottom: 8px;
 }
 
 .randomize-thumb-btn {
@@ -1218,123 +1032,8 @@ input:checked + .slider:before {
   color: white;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s;
 }
 
-.randomize-thumb-btn:hover {
-  background: #3d3d5f;
-}
-
-/* ============ USER PROFILE VIEW MODAL ============ */
-.user-profile-modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.95);
-  align-items: center;
-  justify-content: center;
-  z-index: 1001;
-}
-
-.user-profile-content {
-  background: #1a1a2e;
-  border-radius: 24px;
-  width: 90%;
-  max-width: 400px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.user-profile-header {
-  display: flex;
-  justify-content: flex-end;
-  padding: 16px;
-}
-
-.close-user-profile {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-user-profile:hover {
-  color: #e74c3c;
-}
-
-.user-profile-detail {
-  text-align: center;
-  padding: 20px;
-}
-
-.view-profile-avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 16px;
-  border: 3px solid #667eea;
-}
-
-.view-profile-name {
-  font-size: 22px;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.view-profile-bio {
-  color: #888;
-  font-size: 14px;
-  margin-bottom: 16px;
-}
-
-.view-profile-stats {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
-  margin-bottom: 20px;
-  padding: 16px;
-  border-top: 1px solid #2d2d3f;
-  border-bottom: 1px solid #2d2d3f;
-}
-
-.view-profile-follow-btn {
-  padding: 12px 24px;
-  background: #667eea;
-  border: none;
-  border-radius: 30px;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  margin-bottom: 16px;
-  transition: all 0.2s;
-}
-
-.view-profile-follow-btn:hover {
-  transform: scale(1.02);
-}
-
-.view-profile-follow-btn.following {
-  background: #2d2d3f;
-  color: #888;
-}
-
-.view-profile-tracks {
-  text-align: left;
-  padding: 16px;
-}
-
-.view-profile-tracks h4 {
-  margin-bottom: 12px;
-  color: #667eea;
-}
-
-/* ============ MODAL BUTTONS ============ */
 .modal-buttons {
   display: flex;
   gap: 12px;
@@ -1347,24 +1046,139 @@ input:checked + .slider:before {
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.modal-buttons button:hover {
-  transform: translateY(-1px);
 }
 
 .confirm-btn { background: #667eea; color: white; }
 .cancel-btn { background: #95a5a6; color: white; }
 
-/* ============ LOADING ============ */
+/* Chat Styles */
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #2d2d3f;
+}
+
+.chat-users-list {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.chat-user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #2d2d3f;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.chat-user-item:hover {
+  background: #3d3d5f;
+}
+
+.chat-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.chat-user-name {
+  font-weight: bold;
+}
+
+.chat-conversation {
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+}
+
+.chat-conversation-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d3f;
+}
+
+.back-to-users {
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-message {
+  max-width: 70%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.chat-message.sent {
+  align-self: flex-end;
+  background: #667eea;
+  color: white;
+}
+
+.chat-message.received {
+  align-self: flex-start;
+  background: #2d2d3f;
+  color: white;
+}
+
+.chat-message-time {
+  font-size: 10px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.chat-input-area {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #2d2d3f;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px;
+  background: #2d2d3f;
+  border: none;
+  border-radius: 20px;
+  color: white;
+}
+
+.send-chat-btn {
+  padding: 10px 20px;
+  background: #667eea;
+  border: none;
+  border-radius: 20px;
+  color: white;
+  cursor: pointer;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
   color: #888;
 }
 
-/* ============ TOAST NOTIFICATIONS ============ */
 .toast {
   position: fixed;
   bottom: 20px;
@@ -1376,43 +1190,25 @@ input:checked + .slider:before {
   border-radius: 40px;
   font-size: 14px;
   z-index: 1000;
-  animation: fadeInUp 0.3s ease;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-/* ============ RESPONSIVE DESIGN ============ */
 @media (max-width: 768px) {
   .song-card {
     flex-direction: column;
   }
-  
   .song-thumbnail {
     width: 100%;
     height: 120px;
   }
-  
-  .feed-tab {
-    font-size: 12px;
-    padding: 12px 8px;
-  }
-  
   .transport button {
     padding: 10px 18px;
     font-size: 14px;
   }
-  
   .position-display {
     font-size: 18px;
+  }
+  .chat-message {
+    max-width: 85%;
   }
 }
 
@@ -1420,110 +1216,19 @@ input:checked + .slider:before {
   .track-controls {
     flex-wrap: wrap;
   }
-  
   .volume-slider {
     width: 80px;
   }
-  
   .transport {
     gap: 8px;
   }
-  
-  .bpm-control input {
-    width: 60px;
-  }
-  
-  .fx-section {
-    gap: 8px;
-  }
-  
-  .fx-btn {
-    padding: 5px 10px;
-    font-size: 10px;
-  }
-  
-  .search-modal-content {
-    padding: 16px;
-  }
-  
-  .search-user-item {
-    flex-wrap: wrap;
-  }
-  
-  .search-follow-btn {
-    width: 100%;
-    margin-top: 8px;
-  }
-  
-  .header-right {
-    gap: 8px;
-  }
-  
   .username {
     display: none;
   }
-  
-  .song-title {
-    font-size: 14px;
+  .search-user-item {
+    flex-wrap: wrap;
   }
-  
-  .song-stats {
-    gap: 8px;
-    font-size: 10px;
+  .search-follow-btn, .search-chat-btn {
+    width: 100%;
   }
-  
-  .track-name {
-    font-size: 12px;
-  }
-  
-  .track-controls button {
-    padding: 6px 10px;
-    font-size: 10px;
-  }
-  
-  .recording-settings {
-    gap: 16px;
-  }
-  
-  .countin-number {
-    font-size: 36px;
-  }
-}
-
-/* ============ LANDSCAPE MODE ============ */
-@media (orientation: landscape) and (max-height: 500px) {
-  .feed-tabs {
-    top: 50px;
-  }
-  
-  .track-card {
-    padding: 10px;
-  }
-  
-  .transport button {
-    padding: 8px 16px;
-  }
-  
-  .position-display {
-    font-size: 16px;
-  }
-}
-
-/* ============ SCROLLBAR STYLING ============ */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #1a1a2e;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #3d3d5f;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #4d4d6f;
 }

@@ -52,15 +52,17 @@ const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
+// Generate random image thumbnail based on song title (using Lorem Picsum + seed)
 function generateRandomThumbnail(title) {
-  const colors = [
-    '667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', 
-    '1abc9c', 'e67e22', '9b59b6', '2c3e50', '16a085', 'c0392b',
-    '8e44ad', 'd35400', '7f8c8d', '2ecc71', 'e84393', '6c5ce7'
-  ];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  const encodedTitle = encodeURIComponent(title.substring(0, 20));
-  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&name=${encodedTitle}`;
+  const seed = encodeURIComponent(title.substring(0, 10));
+  // Use Lorem Picsum with seed for consistent but random images
+  return `https://picsum.photos/seed/${seed}/200/200`;
+}
+
+// Generate random image for user avatars
+function generateRandomAvatar(username) {
+  const seed = encodeURIComponent(username.substring(0, 10));
+  return `https://picsum.photos/seed/${seed}/200/200`;
 }
 
 const storage = multer.diskStorage({
@@ -140,7 +142,7 @@ app.post('/api/register', async (req, res) => {
     savedSongs: [],
     createdAt: Date.now(),
     bio: '',
-    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff&size=200`
+    avatar: generateRandomAvatar(username)
   };
 
   writeData(dataFiles.users, users);
@@ -189,7 +191,7 @@ app.post('/api/login', async (req, res) => {
       likedSongs: user.likedSongs || [],
       savedSongs: user.savedSongs || [],
       bio: user.bio || '',
-      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=667eea&color=fff&size=200`
+      avatar: user.avatar || generateRandomAvatar(username)
     }
   });
 });
@@ -324,7 +326,7 @@ app.get('/api/search/songs', authenticateToken, (req, res) => {
       id: song.id,
       title: song.title,
       creator: song.creator,
-      creatorAvatar: users[song.creator]?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
       thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
       bpm: song.bpm || 120,
       trackCount: (song.tracks || []).length,
@@ -359,7 +361,7 @@ app.get('/api/search/users', authenticateToken, (req, res) => {
       bio: user.bio || 'Music creator on TrackStars',
       followersCount: user.followers?.length || 0,
       tracksCount: user.contributedTo?.length || 0,
-      isFollowing: (user.followers || []).includes(currentUsername),
+      isFollowing: (currentUser?.following || []).includes(user.username),
       type: 'user'
     }))
     .sort((a, b) => b.followersCount - a.followersCount);
@@ -388,7 +390,7 @@ app.get('/api/search/all', authenticateToken, (req, res) => {
       id: song.id,
       title: song.title,
       creator: song.creator,
-      creatorAvatar: users[song.creator]?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
       thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
       bpm: song.bpm || 120,
       trackCount: (song.tracks || []).length,
@@ -411,7 +413,7 @@ app.get('/api/search/all', authenticateToken, (req, res) => {
       bio: user.bio || 'Music creator on TrackStars',
       followersCount: user.followers?.length || 0,
       tracksCount: user.contributedTo?.length || 0,
-      isFollowing: (user.followers || []).includes(currentUsername),
+      isFollowing: (users[currentUsername]?.following || []).includes(user.username),
       type: 'user'
     }))
     .sort((a, b) => b.followersCount - a.followersCount)
@@ -427,7 +429,7 @@ app.get('/api/feed/community', authenticateToken, (req, res) => {
     id: song.id,
     title: song.title,
     creator: song.creator,
-    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || generateRandomAvatar(song.creator),
     thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
     bpm: song.bpm || 120,
     trackCount: (song.tracks || []).length,
@@ -454,7 +456,7 @@ app.get('/api/feed/following', authenticateToken, (req, res) => {
     id: song.id,
     title: song.title,
     creator: song.creator,
-    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(song.creator)}&background=667eea&color=fff&size=200`,
+    creatorAvatar: (readData(dataFiles.users)[song.creator]?.avatar) || generateRandomAvatar(song.creator),
     thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
     bpm: song.bpm || 120,
     trackCount: (song.tracks || []).length,
@@ -468,6 +470,38 @@ app.get('/api/feed/following', authenticateToken, (req, res) => {
   res.json(followingSongs);
 });
 
+// ============ MESSAGING ROUTES ============
+app.get('/api/messages/:userId', authenticateToken, (req, res) => {
+  const messages = readData(dataFiles.messages);
+  const conversationId = [req.user.username, req.params.userId].sort().join('-');
+  res.json(messages[conversationId] || []);
+});
+
+app.post('/api/messages', authenticateToken, (req, res) => {
+  const { to, text } = req.body;
+  const messages = readData(dataFiles.messages);
+  const conversationId = [req.user.username, to].sort().join('-');
+  
+  if (!messages[conversationId]) messages[conversationId] = [];
+  
+  const message = {
+    id: uuidv4(),
+    from: req.user.username,
+    to: to,
+    text: text,
+    timestamp: Date.now(),
+    read: false
+  };
+  
+  messages[conversationId].push(message);
+  writeData(dataFiles.messages, messages);
+  
+  io.to(to).emit('new-message', message);
+  
+  res.json(message);
+});
+
+// ============ SONG ROUTES ============
 app.get('/api/songs', (req, res) => {
   const songs = readData(dataFiles.songs);
   const songList = Object.values(songs).map(song => ({
@@ -500,6 +534,7 @@ app.get('/api/songs/:id', (req, res) => {
   if (!song) {
     return res.status(404).json({ error: 'Song not found' });
   }
+  if (!song.thumbnail) song.thumbnail = generateRandomThumbnail(song.title);
   res.json(song);
 });
 
@@ -738,6 +773,16 @@ io.on('connection', (socket) => {
   socket.on('recording-stopped', (data) => {
     const { songId, username } = data;
     socket.to(songId).emit('recording-complete', { username });
+  });
+  
+  socket.on('join-chat', (userId) => {
+    socket.join(`chat-${userId}`);
+    console.log(`User ${userId} joined chat room`);
+  });
+  
+  socket.on('send-chat-message', (data) => {
+    const { to, message, from } = data;
+    io.to(`chat-${to}`).emit('chat-message', { from, message, timestamp: Date.now() });
   });
 
   socket.on('disconnect', () => {

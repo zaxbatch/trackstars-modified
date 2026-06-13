@@ -136,7 +136,6 @@
           <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
         </div>
         
-        <!-- Recording Settings -->
         <div class="recording-settings">
           <div class="setting-item">
             <label class="switch">
@@ -159,6 +158,7 @@
           <div class="countin-progress">
             <div id="countin-progress-bar" class="countin-progress-bar"></div>
           </div>
+          <div class="countin-beat-indicator" id="countin-beat"></div>
         </div>
         
         <div id="recording-status" class="recording-status"></div>
@@ -237,6 +237,30 @@
           <button class="close-user-profile">&times;</button>
         </div>
         <div id="user-profile-details"></div>
+      </div>
+    </div>
+
+    <!-- Chat Modal -->
+    <div id="chat-modal" class="chat-modal">
+      <div class="chat-modal-content">
+        <div class="chat-header">
+          <h3>💬 Messages</h3>
+          <button class="close-chat">&times;</button>
+        </div>
+        <div class="chat-users-list" id="chat-users-list">
+          <div class="loading">Loading users...</div>
+        </div>
+        <div class="chat-conversation" id="chat-conversation" style="display: none;">
+          <div class="chat-conversation-header">
+            <button class="back-to-users" id="back-to-users">← Back</button>
+            <span id="chat-with-user"></span>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-message-input" placeholder="Type a message..." class="chat-input">
+            <button class="send-chat-btn" id="send-chat-btn">Send</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
