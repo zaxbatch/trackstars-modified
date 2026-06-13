@@ -1,7 +1,7 @@
 {
   "name": "trackstars",
-  "version": "2.0.0",
-  "description": "Collaborative DAW Social Platform with Versioning",
+  "version": "4.0.0",
+  "description": "Collaborative DAW Social Platform - TrackStars",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
