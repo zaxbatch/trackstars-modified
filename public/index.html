@@ -38,167 +38,138 @@
   <div id="main-app">
     <div class="header">
       <div class="logo">⭐ TRACKSTARS</div>
-      <div class="header-right">
-        <button class="search-btn" id="search-btn">🔍</button>
-        <div class="user-info">
-          <img id="header-avatar" class="header-avatar" src="" alt="">
-          <span class="username" id="current-user"></span>
-          <button class="logout-btn" id="logout-btn">Logout</button>
-        </div>
+      <div class="user-info">
+        <img id="header-avatar" class="header-avatar" src="" alt="">
+        <span class="username" id="current-user"></span>
+        <button class="logout-btn" id="logout-btn">Logout</button>
       </div>
     </div>
 
-    <!-- Search Modal -->
-    <div id="search-modal" class="search-modal">
-      <div class="search-modal-content">
-        <div class="search-header">
-          <input type="text" id="search-input" class="search-input" placeholder="Search for songs, artists, genres..." autocomplete="off">
-          <button class="close-search" id="close-search">&times;</button>
-        </div>
-        <div class="search-tabs">
-          <button class="search-tab active" data-search-tab="all">🔍 All</button>
-          <button class="search-tab" data-search-tab="songs">🎵 Songs</button>
-          <button class="search-tab" data-search-tab="users">👥 Users</button>
-        </div>
-        <div id="search-results" class="search-results">
-          <div class="search-placeholder">🔍 Search for songs, artists, or genres...</div>
-        </div>
-      </div>
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+      <button class="nav-item active" data-view="library">
+        <span>🎵</span>
+        <span>Library</span>
+      </button>
+      <button class="nav-item" data-view="studio">
+        <span>🎛️</span>
+        <span>Studio</span>
+      </button>
+      <button class="nav-item" data-view="social">
+        <span>💬</span>
+        <span>Social</span>
+      </button>
+      <button class="nav-item" data-view="profile">
+        <span>👤</span>
+        <span>Profile</span>
+      </button>
     </div>
 
-    <!-- Feed Navigation Tabs -->
-    <div class="feed-tabs">
-      <button class="feed-tab active" data-feed="community">🌍 Community Feed</button>
-      <button class="feed-tab" data-feed="following">👥 Following Feed</button>
-      <button class="feed-tab" data-feed="library">📚 My Library</button>
-    </div>
-
-    <!-- Feed Views -->
-    <div id="community-feed" class="feed-view active">
+    <!-- Library View -->
+    <div id="library-view" class="view active">
       <div class="feed-header">
-        <h3>🌍 Latest from the Community</h3>
-        <p>Discover new tracks from creators around the world</p>
-      </div>
-      <div class="song-grid" id="community-songs">
-        <div class="loading">Loading community tracks...</div>
-      </div>
-    </div>
-
-    <div id="following-feed" class="feed-view">
-      <div class="feed-header">
-        <h3>👥 Tracks from Creators You Follow</h3>
-        <p>Stay updated with the latest from your favorite creators</p>
-      </div>
-      <div class="song-grid" id="following-songs">
-        <div class="loading">Loading followed tracks...</div>
-      </div>
-    </div>
-
-    <div id="library-feed" class="feed-view">
-      <div class="feed-header">
-        <h3>📚 My Library</h3>
+        <h3>📚 Song Library</h3>
         <button class="create-btn" id="open-create-modal">+ Create New Track</button>
       </div>
+      <div class="search-bar-container">
+        <input type="text" id="library-search" class="search-input-small" placeholder="🔍 Search songs...">
+      </div>
       <div class="song-grid" id="song-list">
-        <div class="loading">Loading your tracks...</div>
+        <div class="loading">Loading tracks...</div>
       </div>
     </div>
 
-    <!-- Studio View (hidden by default) -->
-    <div id="studio-view" class="studio-view">
-      <div class="daw-header">
-        <div class="song-info">
-          <h2 id="current-song-title">Select a track</h2>
-          <p id="song-creator"></p>
-        </div>
-        <button class="back-btn" id="back-btn">← Back to Feed</button>
-      </div>
-
-      <div class="transport">
-        <button class="play-btn" id="play-btn">▶ Play</button>
-        <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
-        <div class="bpm-control">
-          <span>BPM:</span>
-          <input type="number" id="bpm-input" value="120" min="40" max="300" step="1">
-        </div>
-      </div>
-      <div class="position-display" id="position-display">00:00:00</div>
-
-      <div id="track-mixer">
-        <div class="loading">Select a track to start</div>
-      </div>
-
-      <div class="recording-section">
-        <div class="recording-controls">
-          <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-          <button class="record-btn" id="stop-record-btn" style="display: none;">⏹️ Stop Recording</button>
-          <input type="file" id="audio-file" accept="audio/*" style="display: none;">
-          <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
-        </div>
-        
-        <div class="recording-settings">
-          <div class="setting-item">
-            <label class="switch">
-              <input type="checkbox" id="metronome-toggle" checked>
-              <span class="slider round"></span>
-            </label>
-            <span class="setting-label">🎵 Metronome</span>
+    <!-- Studio View -->
+    <div id="studio-view" class="view">
+      <div id="daw-area">
+        <div class="daw-header">
+          <div class="song-info">
+            <h2 id="current-song-title">Select a track</h2>
+            <p id="song-creator"></p>
           </div>
-          <div class="setting-item">
-            <label class="switch">
-              <input type="checkbox" id="countin-toggle" checked>
-              <span class="slider round"></span>
-            </label>
-            <span class="setting-label">⏱️ 3-Second Count-In</span>
+          <button class="back-btn" id="back-btn">← Back to Library</button>
+        </div>
+
+        <div class="transport">
+          <button class="play-btn" id="play-btn">▶ Play</button>
+          <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
+          <div class="bpm-control">
+            <span>BPM:</span>
+            <input type="number" id="bpm-input" value="120" min="40" max="300" step="1">
           </div>
         </div>
-        
-        <div id="countin-display" class="countin-display" style="display: none;">
-          <span id="countin-number" class="countin-number">3</span>
-          <div class="countin-progress">
-            <div id="countin-progress-bar" class="countin-progress-bar"></div>
-          </div>
-          <div class="countin-beat-indicator" id="countin-beat"></div>
+        <div class="position-display" id="position-display">00:00:00</div>
+
+        <div id="track-mixer">
+          <div class="loading">Select a track to start</div>
         </div>
-        
-        <div id="recording-status" class="recording-status"></div>
-        <div class="metronome-hint">🎵 Toggle metronome for perfect timing during recording</div>
+
+        <div class="recording-section">
+          <div class="recording-controls">
+            <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
+            <button class="record-btn" id="stop-record-btn" style="display: none;">⏹️ Stop Recording</button>
+            <input type="file" id="audio-file" accept="audio/*" style="display: none;">
+            <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
+          </div>
+          
+          <div class="recording-settings">
+            <div class="setting-item">
+              <label class="switch">
+                <input type="checkbox" id="metronome-toggle" checked>
+                <span class="slider round"></span>
+              </label>
+              <span class="setting-label">🎵 Metronome</span>
+            </div>
+            <div class="setting-item">
+              <label class="switch">
+                <input type="checkbox" id="countin-toggle" checked>
+                <span class="slider round"></span>
+              </label>
+              <span class="setting-label">⏱️ 3-Second Count-In</span>
+            </div>
+          </div>
+          
+          <div id="countin-display" class="countin-display" style="display: none;">
+            <span id="countin-number" class="countin-number">3</span>
+            <div class="countin-progress">
+              <div id="countin-progress-bar" class="countin-progress-bar"></div>
+            </div>
+            <div class="countin-beat-indicator" id="countin-beat"></div>
+          </div>
+          
+          <div id="recording-status" class="recording-status"></div>
+          <div class="metronome-hint">🎵 Toggle metronome for perfect timing during recording</div>
+        </div>
       </div>
     </div>
 
-    <!-- Profile Modal -->
-    <div id="profile-modal" class="profile-modal">
-      <div class="profile-modal-content">
-        <div class="profile-modal-header">
-          <h3>Edit Profile</h3>
-          <button class="close-modal">&times;</button>
+    <!-- Social View (Chat) -->
+    <div id="social-view" class="view">
+      <div class="chat-container">
+        <div class="chat-header">
+          <h3>💬 Messages</h3>
         </div>
-        <div class="profile-avatar-section">
-          <img id="profile-modal-avatar" class="profile-modal-avatar" src="" alt="">
-          <button class="change-avatar-btn" id="change-avatar-btn">Change Avatar</button>
-          <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+        <div class="chat-users-list" id="chat-users-list">
+          <div class="loading">Loading users...</div>
         </div>
-        <div class="profile-bio-section">
-          <label>Bio</label>
-          <textarea id="profile-bio" rows="3" placeholder="Tell us about yourself..."></textarea>
-        </div>
-        <div class="profile-stats">
-          <div class="stat">
-            <span class="stat-value" id="profile-followers">0</span>
-            <span class="stat-label">Followers</span>
+        <div class="chat-conversation" id="chat-conversation" style="display: none;">
+          <div class="chat-conversation-header">
+            <button class="back-to-users" id="back-to-users">← Back</button>
+            <span id="chat-with-user"></span>
           </div>
-          <div class="stat">
-            <span class="stat-value" id="profile-following">0</span>
-            <span class="stat-label">Following</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value" id="profile-tracks">0</span>
-            <span class="stat-label">Tracks</span>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-message-input" placeholder="Type a message..." class="chat-input">
+            <button class="send-chat-btn" id="send-chat-btn">Send</button>
           </div>
         </div>
-        <div class="modal-buttons">
-          <button class="save-profile-btn" id="save-profile-btn">Save Changes</button>
-        </div>
+      </div>
+    </div>
+
+    <!-- Profile View -->
+    <div id="profile-view" class="view">
+      <div id="profile-content">
+        <div class="loading">Loading profile...</div>
       </div>
     </div>
 
@@ -219,7 +190,7 @@
           <option value="Jazz">Jazz</option>
           <option value="Ambient">Ambient</option>
         </select>
-        <div class="thumbnail-preview" id="thumbnail-preview">
+        <div class="thumbnail-preview">
           <img id="preview-thumb" src="" alt="Thumbnail preview">
           <button class="randomize-thumb-btn" id="randomize-thumb-btn">🎨 Randomize Thumbnail</button>
         </div>
@@ -230,37 +201,13 @@
       </div>
     </div>
 
-    <!-- User Profile View Modal -->
+    <!-- User Profile Modal -->
     <div id="user-profile-modal" class="user-profile-modal">
       <div class="user-profile-content">
         <div class="user-profile-header">
           <button class="close-user-profile">&times;</button>
         </div>
         <div id="user-profile-details"></div>
-      </div>
-    </div>
-
-    <!-- Chat Modal -->
-    <div id="chat-modal" class="chat-modal">
-      <div class="chat-modal-content">
-        <div class="chat-header">
-          <h3>💬 Messages</h3>
-          <button class="close-chat">&times;</button>
-        </div>
-        <div class="chat-users-list" id="chat-users-list">
-          <div class="loading">Loading users...</div>
-        </div>
-        <div class="chat-conversation" id="chat-conversation" style="display: none;">
-          <div class="chat-conversation-header">
-            <button class="back-to-users" id="back-to-users">← Back</button>
-            <span id="chat-with-user"></span>
-          </div>
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input-area">
-            <input type="text" id="chat-message-input" placeholder="Type a message..." class="chat-input">
-            <button class="send-chat-btn" id="send-chat-btn">Send</button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
