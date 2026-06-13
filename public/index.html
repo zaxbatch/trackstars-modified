@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" type="text/css" href="css/style.css">
     <title>TrackStars - Collaborative DAW</title>
-
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <!-- Auth Modal -->
@@ -47,7 +46,7 @@
         </div>
 
         <div class="main-layout">
-            <!-- Sidebar -->
+            <!-- Left Sidebar - Song Library -->
             <div class="sidebar">
                 <div class="sidebar-header">
                     <h3>🎵 Song Library</h3>
@@ -58,7 +57,7 @@
                 </div>
             </div>
 
-            <!-- DAW Area -->
+            <!-- Center - DAW Area -->
             <div class="daw-area" id="daw-area" style="display: none;">
                 <div class="daw-header">
                     <div class="song-info">
@@ -108,23 +107,65 @@
                 </div>
             </div>
 
-            <!-- Chat Panel -->
-            <div class="chat-panel" id="chat-panel">
-                <div class="chat-header">
-                    <h3>Messages</h3>
-                    <button class="close-chat" id="close-chat">×</button>
+            <!-- Right Sidebar - Social Feed -->
+            <div class="right-sidebar" id="right-sidebar">
+                <div class="social-section">
+                    <h3>📰 Activity Feed</h3>
+                    <div id="activity-feed">
+                        <div style="text-align: center; color: #888;">Loading feed...</div>
+                    </div>
                 </div>
-                <div class="chat-search">
-                    <input type="text" id="search-users" placeholder="Search users...">
-                    <div id="search-results" class="search-results" style="display: none;"></div>
+                <div class="social-section">
+                    <h3>📈 Trending Songs</h3>
+                    <div id="trending-list"></div>
                 </div>
-                <div class="conversations-list" id="conversations-list"></div>
-                <div class="chat-messages" id="chat-messages" style="display: none;"></div>
-                <div class="chat-input-area" id="chat-input-area" style="display: none;">
-                    <input type="text" class="chat-input" id="chat-input" placeholder="Type a message...">
-                    <button class="send-btn" id="send-btn">Send</button>
+                <div class="social-section">
+                    <h3>⭐ Top Contributors</h3>
+                    <div id="top-contributors"></div>
+                </div>
+                <div class="social-section">
+                    <h3>👥 Suggested Users</h3>
+                    <div id="suggested-users"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Bottom Menu -->
+        <div class="bottom-menu" id="bottom-menu">
+            <div class="menu-item" data-view="library">
+                <div class="menu-icon">🎵</div>
+                <div class="menu-label">Library</div>
+            </div>
+            <div class="menu-item" data-view="feed">
+                <div class="menu-icon">📰</div>
+                <div class="menu-label">Feed</div>
+            </div>
+            <div class="menu-item" data-view="trending">
+                <div class="menu-icon">📈</div>
+                <div class="menu-label">Trending</div>
+            </div>
+            <div class="menu-item" data-view="social">
+                <div class="menu-icon">👥</div>
+                <div class="menu-label">Social</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Panel (slide-out) -->
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-header">
+            <h3>Messages</h3>
+            <button class="close-chat" id="close-chat">×</button>
+        </div>
+        <div class="chat-search">
+            <input type="text" id="search-users" placeholder="Search users...">
+            <div id="search-results" class="search-results" style="display: none;"></div>
+        </div>
+        <div class="conversations-list" id="conversations-list"></div>
+        <div class="chat-messages" id="chat-messages" style="display: none;"></div>
+        <div class="chat-input-area" id="chat-input-area" style="display: none;">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Type a message...">
+            <button class="send-btn" id="send-btn">Send</button>
         </div>
     </div>
 

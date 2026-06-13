@@ -17,6 +17,7 @@ let mediaStream = null;
 let bpm = 120;
 let isRefreshing = false;
 let activeChat = null;
+let currentView = 'library';
 
 const thumbnailOptions = [
     'https://picsum.photos/id/29/400/400',
@@ -215,6 +216,7 @@ async function startAudioRecording() {
                 document.getElementById('record-btn').disabled = true;
                 document.getElementById('upload-btn').disabled = true;
                 setTimeout(() => { document.getElementById('recording-status').innerHTML = ''; }, 3000);
+                loadActivityFeed();
             } catch (error) {
                 document.getElementById('recording-status').innerHTML = '❌ Upload failed';
             }
@@ -267,6 +269,7 @@ async function deleteTrack(trackId) {
         displayTracks();
         document.getElementById('record-btn').disabled = false;
         document.getElementById('upload-btn').disabled = false;
+        loadActivityFeed();
     } catch (error) { alert('Error deleting track'); }
 }
 
@@ -287,6 +290,7 @@ async function uploadTrack() {
         document.getElementById('record-btn').disabled = true;
         document.getElementById('upload-btn').disabled = true;
         setTimeout(() => { document.getElementById('recording-status').innerHTML = ''; }, 3000);
+        loadActivityFeed();
     } catch (error) { document.getElementById('recording-status').innerHTML = '❌ Upload failed'; }
 }
 
@@ -377,6 +381,7 @@ async function selectSong(songId) {
         isPlaying = false;
         currentPosition = 0;
         updatePositionDisplay(0);
+        setView('library');
     } catch (error) { console.error(error); alert('Error loading song'); }
     finally { isRefreshing = false; }
 }
@@ -425,6 +430,7 @@ async function voteTrack(trackId, vote) {
         const track = currentSong.tracks.find(t => t.id === trackId);
         if (track) track.votes = result.votes;
         displayTracks();
+        loadTrendingSongs();
     } catch (error) { alert('Error voting'); }
 }
 
@@ -461,6 +467,7 @@ async function postComment() {
         document.getElementById('comment-text').value = '';
         currentSong = await api.getSong(currentSong.id);
         displayComments();
+        loadActivityFeed();
     } catch (error) { alert('Error posting comment'); }
 }
 
@@ -478,6 +485,8 @@ async function createSong() {
         document.getElementById('new-song-title').value = '';
         await selectSong(newSong.id);
         loadSongs();
+        loadActivityFeed();
+        loadTrendingSongs();
     } catch (error) { alert('Error creating song'); }
 }
 
@@ -490,6 +499,7 @@ async function forkSong() {
         alert('Version forked! You are now the owner of this new version.');
         await selectSong(newSong.id);
         loadSongs();
+        loadActivityFeed();
     } catch (error) { alert('Error forking song'); }
 }
 
@@ -522,6 +532,84 @@ function backToLibrary() {
     if (socket && currentSong) socket.emit('leave-song', currentSong.id);
     currentSong = null;
     loadSongs();
+}
+
+// Social Feed Functions
+async function loadActivityFeed() {
+    try {
+        const songs = await api.getSongs();
+        const recentSongs = songs.slice(0, 10);
+        const container = document.getElementById('activity-feed');
+        if (recentSongs.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888;">No recent activity</div>';
+            return;
+        }
+        container.innerHTML = recentSongs.map(song => `
+            <div class="feed-item">
+                <strong>${escapeHtml(song.creator)}</strong> created "<strong>${escapeHtml(song.title)}</strong>"<br>
+                <small>v${song.version} • ${new Date(song.createdAt).toLocaleDateString()}</small>
+            </div>
+        `).join('');
+    } catch (error) { console.error('Error loading feed:', error); }
+}
+
+async function loadTrendingSongs() {
+    try {
+        const songs = await api.getSongs();
+        const trending = songs.sort((a, b) => b.upvotes - a.upvotes).slice(0, 5);
+        const container = document.getElementById('trending-list');
+        if (trending.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888;">No trending songs</div>';
+            return;
+        }
+        container.innerHTML = trending.map(song => `
+            <div class="trending-song" onclick="selectSong('${song.id}')">
+                <div class="trending-title">${escapeHtml(song.title)} <span class="version-badge">v${song.version}</span></div>
+                <div class="trending-stats">by ${escapeHtml(song.creator)} • 👍 ${song.upvotes} votes</div>
+            </div>
+        `).join('');
+    } catch (error) { console.error('Error loading trending:', error); }
+}
+
+async function loadTopContributors() {
+    try {
+        const users = await api.searchUsers('');
+        const container = document.getElementById('top-contributors');
+        if (!users || users.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888;">Loading...</div>';
+            return;
+        }
+        const sorted = users.sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0)).slice(0, 5);
+        container.innerHTML = sorted.map(user => `
+            <div class="contributor-item">
+                <div>
+                    <div class="contributor-name">${escapeHtml(user.username)}</div>
+                    <div class="contributor-count">⭐ ${user.followerCount || 0} followers</div>
+                </div>
+                <button class="follow-btn-small" onclick="followUser('${user.username}')">Follow</button>
+            </div>
+        `).join('');
+    } catch (error) { console.error('Error loading contributors:', error); }
+}
+
+async function loadSuggestedUsers() {
+    try {
+        const users = await api.searchUsers('');
+        const container = document.getElementById('suggested-users');
+        if (!users || users.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888;">No suggestions</div>';
+            return;
+        }
+        const randomUsers = users.sort(() => 0.5 - Math.random()).slice(0, 5);
+        container.innerHTML = randomUsers.map(user => `
+            <div class="contributor-item">
+                <div>
+                    <div class="contributor-name">${escapeHtml(user.username)}</div>
+                </div>
+                <button class="follow-btn-small" onclick="followUser('${user.username}')">Follow</button>
+            </div>
+        `).join('');
+    } catch (error) { console.error('Error loading suggestions:', error); }
 }
 
 // Chat Functions
@@ -559,7 +647,7 @@ async function loadMessages(username) {
         const container = document.getElementById('chat-messages');
         container.innerHTML = messages.map(msg => `
             <div class="message ${msg.from === currentUser.username ? 'sent' : 'received'}">
-                ${msg.text}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>
+                ${escapeHtml(msg.text)}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>
             </div>
         `).join('');
         container.scrollTop = container.scrollHeight;
@@ -603,22 +691,60 @@ async function followUser(username) {
         else await api.followUser(username);
         document.getElementById('search-users').value = '';
         document.getElementById('search-results').style.display = 'none';
+        loadTopContributors();
+        loadSuggestedUsers();
     } catch (error) { alert('Error'); }
-}
-
-function closeChat() {
-    activeChat = null;
-    document.getElementById('conversations-list').style.display = 'block';
-    document.getElementById('chat-messages').style.display = 'none';
-    document.getElementById('chat-input-area').style.display = 'none';
-    document.querySelector('.chat-header h3').textContent = 'Messages';
-    loadConversations();
 }
 
 function toggleChat() {
     const panel = document.getElementById('chat-panel');
-    panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
-    if (panel.style.display === 'flex') loadConversations();
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) loadConversations();
+}
+
+function closeChat() {
+    activeChat = null;
+    document.getElementById('chat-panel').classList.remove('open');
+    document.getElementById('conversations-list').style.display = 'block';
+    document.getElementById('chat-messages').style.display = 'none';
+    document.getElementById('chat-input-area').style.display = 'none';
+    document.querySelector('.chat-header h3').textContent = 'Messages';
+}
+
+// Bottom Menu Navigation
+function setView(view) {
+    currentView = view;
+    const rightSidebar = document.getElementById('right-sidebar');
+    const librarySection = document.querySelector('.sidebar');
+    
+    if (view === 'library') {
+        rightSidebar.style.display = 'flex';
+        librarySection.style.display = 'flex';
+        rightSidebar.scrollTop = 0;
+    } else if (view === 'feed') {
+        rightSidebar.style.display = 'flex';
+        librarySection.style.display = 'flex';
+        const feedSection = document.querySelector('.social-section');
+        if (feedSection) feedSection.scrollIntoView({ behavior: 'smooth' });
+    } else if (view === 'trending') {
+        rightSidebar.style.display = 'flex';
+        librarySection.style.display = 'flex';
+        const trendingSection = document.querySelectorAll('.social-section')[1];
+        if (trendingSection) trendingSection.scrollIntoView({ behavior: 'smooth' });
+    } else if (view === 'social') {
+        rightSidebar.style.display = 'flex';
+        librarySection.style.display = 'flex';
+        const socialSection = document.querySelectorAll('.social-section')[2];
+        if (socialSection) socialSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    document.querySelectorAll('.menu-item').forEach(item => {
+        if (item.dataset.view === view) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
 }
 
 // Tutorial
@@ -671,12 +797,14 @@ function initSocket() {
         if (currentSong && currentSong.id === data.songId) {
             currentSong = await api.getSong(currentSong.id);
             displayTracks();
+            loadActivityFeed();
         }
     });
     socket.on('track-deleted', async (data) => {
         if (currentSong && currentSong.id === data.songId) {
             currentSong = await api.getSong(currentSong.id);
             displayTracks();
+            loadActivityFeed();
         }
     });
     socket.on('track-updated', (data) => {
@@ -694,6 +822,7 @@ function initSocket() {
             const track = currentSong.tracks.find(t => t.id === data.trackId);
             if (track) track.votes = data.votes;
             displayTracks();
+            loadTrendingSongs();
         }
     });
     socket.on('new-comment', async (comment) => {
@@ -701,11 +830,16 @@ function initSocket() {
             if (!currentSong.comments) currentSong.comments = [];
             currentSong.comments.push(comment);
             displayComments();
+            loadActivityFeed();
         }
     });
     socket.on('new-message', (message) => {
         if (activeChat === message.from) loadMessages(activeChat);
         else loadConversations();
+    });
+    socket.on('song-created', () => {
+        loadSongs();
+        loadActivityFeed();
     });
     socket.on('user-recording', (data) => {
         document.getElementById('recording-status').innerHTML = `🎙️ ${data.username} is recording...`;
@@ -737,6 +871,10 @@ function setupEventListeners() {
             document.getElementById('current-user').textContent = currentUser.username;
             initSocket();
             loadSongs();
+            loadActivityFeed();
+            loadTrendingSongs();
+            loadTopContributors();
+            loadSuggestedUsers();
             showTutorial();
         } catch (error) {
             document.getElementById('login-error').textContent = error.message;
@@ -755,6 +893,10 @@ function setupEventListeners() {
             document.getElementById('current-user').textContent = currentUser.username;
             initSocket();
             loadSongs();
+            loadActivityFeed();
+            loadTrendingSongs();
+            loadTopContributors();
+            loadSuggestedUsers();
             showTutorial();
         } catch (error) {
             document.getElementById('register-error').textContent = error.message;
@@ -782,8 +924,22 @@ function setupEventListeners() {
     document.getElementById('send-btn').addEventListener('click', sendMessage);
     document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     document.getElementById('search-users').addEventListener('input', searchUsers);
+    
+    // Bottom menu
+    document.querySelectorAll('.menu-item').forEach(item => {
+        item.addEventListener('click', () => {
+            setView(item.dataset.view);
+        });
+    });
+    
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.chat-search')) document.getElementById('search-results').style.display = 'none';
+        if (!e.target.closest('.create-modal') && e.target.classList.contains('create-modal')) {
+            document.getElementById('create-modal').style.display = 'none';
+        }
+        if (!e.target.closest('.thumbnail-modal') && e.target.classList.contains('thumbnail-modal')) {
+            document.getElementById('thumbnail-modal').style.display = 'none';
+        }
     });
 }
 
@@ -798,6 +954,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('current-user').textContent = currentUser.username;
         initSocket();
         loadSongs();
+        loadActivityFeed();
+        loadTrendingSongs();
+        loadTopContributors();
+        loadSuggestedUsers();
         showTutorial();
     } else {
         document.getElementById('auth-modal').style.display = 'flex';
