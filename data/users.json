@@ -1,0 +1,17 @@
+{
+  "Zax": {
+    "username": "Zax",
+    "email": "sneakjunkmail@gmail.com",
+    "password": "$2a$10$mPNTo8JmiALhYYptRUKFpeWHeOV6K618SyUnwC1TN1gNhkSPBXISC",
+    "followers": [],
+    "following": [],
+    "contributedTo": [
+      "77b72cf4-2016-4e9c-98db-c19a3db595be"
+    ],
+    "likedSongs": [],
+    "savedSongs": [],
+    "createdAt": 1781328374991,
+    "bio": "",
+    "avatar": "https://ui-avatars.com/api/?name=Zax&background=667eea&color=fff"
+  }
+}

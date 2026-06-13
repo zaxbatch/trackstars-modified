@@ -1,0 +1,204 @@
+/* 8Trax Mobile Styles */
+:root {
+  --primary: #667eea;
+  --primary-dark: #5a67d8;
+  --secondary: #764ba2;
+  --bg-dark: #0a0a12;
+  --bg-card: #1a1a2e;
+  --bg-elevated: #2d2d3f;
+  --danger: #e74c3c;
+  --success: #27ae60;
+  --warning: #f39c12;
+}
+
+/* Touch optimizations */
+button, 
+.nav-item,
+.song-card,
+.track-card,
+.back-btn,
+.record-btn,
+.upload-btn,
+.mute-btn,
+.vote-btn,
+.delete-btn,
+.fx-btn,
+.follow-btn,
+.send-btn,
+.post-comment {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:active,
+.nav-item:active {
+  transform: scale(0.96);
+}
+
+/* Prevent zoom on input focus */
+input, 
+select, 
+textarea {
+  font-size: 16px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Safe area support */
+.view {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
+/* Improved scrolling */
+.song-grid,
+.track-mixer,
+.comments-list,
+.messages-list {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Loading spinner */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-left: 10px;
+  border: 2px solid #667eea;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.9);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 40px;
+  font-size: 14px;
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Pull to refresh indicator */
+.pull-to-refresh {
+  text-align: center;
+  padding: 10px;
+  color: #888;
+  font-size: 12px;
+}
+
+/* Disable pull-to-refresh on body */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Improved track controls on mobile */
+@media (max-width: 480px) {
+  .track-controls {
+    flex-wrap: wrap;
+  }
+  
+  .volume-slider {
+    width: 80px;
+  }
+  
+  .transport {
+    gap: 8px;
+  }
+  
+  .transport button {
+    padding: 10px 18px;
+    font-size: 14px;
+  }
+  
+  .bpm-control input {
+    width: 60px;
+  }
+  
+  .fx-section {
+    gap: 8px;
+  }
+  
+  .fx-btn {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+  
+  .comment-input-area {
+    flex-direction: column;
+  }
+  
+  .post-comment {
+    width: 100%;
+  }
+}
+
+/* Landscape mode */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bottom-nav {
+    padding: 5px 15px;
+  }
+  
+  .nav-item span:first-child {
+    font-size: 20px;
+  }
+  
+  .nav-item span:last-child {
+    font-size: 10px;
+  }
+  
+  .track-card {
+    padding: 10px;
+  }
+}
+
+/* Dark mode enhancements */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0a0a12;
+  }
+}
+
+/* Hover effects for devices that support it */
+@media (hover: hover) {
+  button:hover,
+  .song-card:hover,
+  .nav-item:hover {
+    transform: translateY(-2px);
+  }
+  
+  .song-card:active,
+  button:active {
+    transform: translateY(0);
+  }
+}
