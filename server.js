@@ -44,7 +44,7 @@ const writeData = (file, data) => {
 };
 
 function generateRandomThumbnail(title) {
-  const imageIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+  const imageIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
   const id = imageIds[Math.floor(Math.random() * imageIds.length)];
   return `https://picsum.photos/id/${id}/200/200`;
 }
@@ -137,7 +137,9 @@ app.put('/api/users/bio', authenticateToken, (req, res) => {
 
 app.put('/api/users/tutorial', authenticateToken, (req, res) => {
   const users = readData(dataFiles.users);
-  users[req.user.username].tutorialCompleted = true;
+  const user = users[req.user.username];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.tutorialCompleted = true;
   writeData(dataFiles.users, users);
   res.json({ success: true });
 });
@@ -356,6 +358,18 @@ app.post('/api/songs', authenticateToken, (req, res) => {
   res.json(newSong);
 });
 
+app.post('/api/songs/:id/thumbnail', authenticateToken, upload.single('thumbnail'), (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can change thumbnail' });
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  
+  song.thumbnail = '/uploads/thumbnails/' + req.file.filename;
+  writeData(dataFiles.songs, songs);
+  res.json({ thumbnail: song.thumbnail });
+});
+
 app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
@@ -386,30 +400,6 @@ app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req
   }
   io.to(song.id).emit('track-added', { songId: song.id, track: newTrack });
   res.json(newTrack);
-});
-
-app.post('/api/songs/:id/thumbnail', authenticateToken, upload.single('thumbnail'), (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can change thumbnail' });
-  if (!req.file) return res.status(400).json({ error: 'No file' });
-  
-  song.thumbnail = '/uploads/thumbnails/' + req.file.filename;
-  writeData(dataFiles.songs, songs);
-  res.json({ thumbnail: song.thumbnail });
-});
-
-app.put('/api/songs/:id/bpm', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only version owner can change BPM' });
-  
-  song.bpm = req.body.bpm;
-  writeData(dataFiles.songs, songs);
-  io.to(song.id).emit('bpm-changed', { bpm: song.bpm });
-  res.json({ bpm: song.bpm });
 });
 
 app.delete('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
@@ -464,6 +454,18 @@ app.put('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
   writeData(dataFiles.songs, songs);
   io.to(song.id).emit('track-updated', { trackId: req.params.trackId, updates: { volume: track.volume, muted: track.muted } });
   res.json(track);
+});
+
+app.put('/api/songs/:id/bpm', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only version owner can change BPM' });
+  
+  song.bpm = req.body.bpm;
+  writeData(dataFiles.songs, songs);
+  io.to(song.id).emit('bpm-changed', { bpm: song.bpm });
+  res.json({ bpm: song.bpm });
 });
 
 app.post('/api/songs/:id/comment', authenticateToken, (req, res) => {
@@ -536,6 +538,14 @@ io.on('connection', (socket) => {
   
   socket.on('track-update', (data) => {
     socket.to(data.songId).emit('track-updated', { trackId: data.trackId, updates: data.updates });
+  });
+  
+  socket.on('recording-started', (data) => {
+    socket.to(data.songId).emit('user-recording', { username: data.username });
+  });
+  
+  socket.on('recording-stopped', (data) => {
+    socket.to(data.songId).emit('recording-complete', { username: data.username });
   });
   
   socket.on('join-chat', (userId) => {
