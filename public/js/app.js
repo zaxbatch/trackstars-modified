@@ -1,769 +1,815 @@
-// TrackStars - Complete Application
-let socket = null, token = null, currentUser = null, currentSong = null;
-let audioCtx = null, buffers = new Map(), sources = [], gains = new Map();
-let isPlaying = false, isRecording = false, currentPos = 0, startTime = 0;
-let timerInterval = null, mediaRecorder = null, chunks = [], stream = null;
-let bpm = 120, metronomeInterval = null, metronomeCtx = null;
-let metronomeOn = true, countInOn = true, countInActive = false, currentChatUser = null;
+let socket = null;
+let token = null;
+let currentUser = null;
+let currentSong = null;
+let currentAudioContext = null;
+let currentBuffers = new Map();
+let currentSources = [];
+let currentGains = new Map();
+let isPlaying = false;
+let isRecording = false;
+let currentPosition = 0;
+let startTime = 0;
+let timerInterval = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let mediaStream = null;
+let bpm = 120;
+let isRefreshing = false;
+let activeChat = null;
 
-// API
+const thumbnailOptions = [
+    'https://picsum.photos/id/29/400/400',
+    'https://picsum.photos/id/30/400/400',
+    'https://picsum.photos/id/42/400/400',
+    'https://picsum.photos/id/96/400/400',
+    'https://picsum.photos/id/155/400/400',
+    'https://picsum.photos/id/169/400/400',
+    'https://picsum.photos/id/176/400/400',
+    'https://picsum.photos/id/20/400/400',
+    'https://picsum.photos/id/26/400/400',
+    'https://picsum.photos/id/28/400/400'
+];
+
 const api = {
-  async request(endpoint, opts = {}) {
-    const headers = { 'Content-Type': 'application/json', ...opts.headers };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(endpoint, { ...opts, headers });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
-    return res.json();
-  },
-  getSongs: () => api.request('/api/songs'),
-  getSong: id => api.request(`/api/songs/${id}`),
-  createSong: data => api.request('/api/songs', { method: 'POST', body: JSON.stringify(data) }),
-  uploadTrack: async (id, file) => {
-    const fd = new FormData();
-    fd.append('audio', file);
-    const res = await fetch(`/api/songs/${id}/track`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
-    if (!res.ok) throw new Error('Upload failed');
-    return res.json();
-  },
-  deleteTrack: (sid, tid) => api.request(`/api/songs/${sid}/track/${tid}`, { method: 'DELETE' }),
-  voteTrack: (sid, tid, v) => api.request(`/api/songs/${sid}/track/${tid}/vote`, { method: 'POST', body: JSON.stringify({ vote: v }) }),
-  followUser: u => api.request(`/api/users/${u}/follow`, { method: 'POST' }),
-  updateBio: bio => api.request('/api/users/bio', { method: 'PUT', body: JSON.stringify({ bio }) }),
-  uploadAvatar: async file => {
-    const fd = new FormData();
-    fd.append('avatar', file);
-    const res = await fetch('/api/upload-avatar', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
-    if (!res.ok) throw new Error('Upload failed');
-    return res.json();
-  },
-  getMessages: u => api.request(`/api/messages/${u}`),
-  sendMessage: (to, text) => api.request('/api/messages', { method: 'POST', body: JSON.stringify({ to, text }) }),
-  getUsers: () => api.request('/api/users'),
-  getUser: u => api.request(`/api/users/${u}`),
-  getPublicFeed: () => api.request('/api/feed/public')
+    async request(endpoint, options = {}) {
+        const headers = { 'Content-Type': 'application/json', ...options.headers };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        try {
+            const response = await fetch(endpoint, { ...options, headers });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Request failed' }));
+                throw new Error(error.error || `HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(`API Error:`, error);
+            throw error;
+        }
+    },
+    getSongs() { return this.request('/api/songs'); },
+    getSong(id) { return this.request(`/api/songs/${id}`); },
+    getSongVersions(id) { return this.request(`/api/songs/${id}/versions`); },
+    createSong(data) { return this.request('/api/songs', { method: 'POST', body: JSON.stringify(data) }); },
+    updateBpm(songId, bpm) { return this.request(`/api/songs/${songId}/bpm`, { method: 'PUT', body: JSON.stringify({ bpm }) }); },
+    updateThumbnail(songId, file) {
+        const formData = new FormData();
+        formData.append('thumbnail', file);
+        return fetch(`/api/songs/${songId}/thumbnail`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData }).then(r => r.json());
+    },
+    updateThumbnailUrl(songId, url) {
+        return this.request(`/api/songs/${songId}/thumbnail`, { method: 'POST', body: JSON.stringify({ thumbnailUrl: url }) });
+    },
+    uploadTrack(songId, file) {
+        const formData = new FormData();
+        formData.append('audio', file);
+        return fetch(`/api/songs/${songId}/track`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData }).then(r => r.json());
+    },
+    deleteTrack(songId, trackId) { return this.request(`/api/songs/${songId}/track/${trackId}`, { method: 'DELETE' }); },
+    voteTrack(songId, trackId, vote) { return this.request(`/api/songs/${songId}/track/${trackId}/vote`, { method: 'POST', body: JSON.stringify({ vote }) }); },
+    addComment(songId, text) { return this.request(`/api/songs/${songId}/comment`, { method: 'POST', body: JSON.stringify({ text }) }); },
+    getConversations() { return this.request('/api/conversations'); },
+    getMessages(username) { return this.request(`/api/messages/${username}`); },
+    sendMessage(to, text) { return this.request('/api/messages', { method: 'POST', body: JSON.stringify({ to, text }) }); },
+    markMessagesRead(from) { return this.request('/api/messages/read', { method: 'POST', body: JSON.stringify({ from }) }); },
+    searchUsers(q) { return this.request(`/api/users/search?q=${encodeURIComponent(q)}`); },
+    followUser(username) { return this.request(`/api/users/${username}/follow`, { method: 'POST' }); },
+    unfollowUser(username) { return this.request(`/api/users/${username}/unfollow`, { method: 'POST' }); },
+    completeTutorial() { return this.request('/api/users/tutorial', { method: 'POST' }); }
 };
 
-// Auth
-async function register(u, e, p, c) {
-  if (p !== c) throw new Error('Passwords do not match');
-  if (p.length < 6) throw new Error('Password too short');
-  const res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, email: e, password: p }) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error);
-  token = data.token;
-  currentUser = data.user;
-  localStorage.setItem('token', token);
-  localStorage.setItem('user', JSON.stringify(currentUser));
-  return true;
+async function register(username, email, password, confirm) {
+    if (password !== confirm) throw new Error('Passwords do not match');
+    if (password.length < 6) throw new Error('Password must be at least 6 characters');
+    const response = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, email, password }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    token = data.token;
+    currentUser = data.user;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(currentUser));
+    return true;
 }
 
-async function login(u, p) {
-  const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error);
-  token = data.token;
-  currentUser = data.user;
-  localStorage.setItem('token', token);
-  localStorage.setItem('user', JSON.stringify(currentUser));
-  return true;
+async function login(username, password) {
+    const response = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    token = data.token;
+    currentUser = data.user;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(currentUser));
+    return true;
 }
 
 function logout() {
-  if (isPlaying) stopPlayback();
-  if (isRecording) stopRecording();
-  if (metronomeInterval) clearInterval(metronomeInterval);
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
-  token = null;
-  localStorage.clear();
-  location.reload();
+    if (isPlaying) stopPlayback();
+    if (isRecording) stopAudioRecording();
+    if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+    if (currentAudioContext) { currentAudioContext.close(); currentAudioContext = null; }
+    token = null;
+    currentUser = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    location.reload();
 }
 
-// Audio
-function playClick(isCountIn = false) {
-  if (!metronomeOn && !isCountIn) return;
-  if (!metronomeCtx) metronomeCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = metronomeCtx.createOscillator();
-  const gain = metronomeCtx.createGain();
-  osc.connect(gain);
-  gain.connect(metronomeCtx.destination);
-  osc.frequency.value = isCountIn ? 880 : 1000;
-  gain.gain.value = 0.3;
-  osc.start();
-  gain.gain.exponentialRampToValueAtTime(0.00001, metronomeCtx.currentTime + 0.1);
-  osc.stop(metronomeCtx.currentTime + 0.1);
+async function initAudioContext() {
+    if (currentAudioContext) return currentAudioContext;
+    currentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    return currentAudioContext;
 }
 
-function startMetronome() {
-  if (metronomeInterval) clearInterval(metronomeInterval);
-  if (!metronomeOn || countInActive) return;
-  metronomeInterval = setInterval(() => { if (isRecording && !countInActive) playClick(false); }, (60 / bpm) * 1000);
+async function loadTrackAudio(audioUrl) {
+    const response = await fetch(audioUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    return await currentAudioContext.decodeAudioData(arrayBuffer);
 }
 
-function stopMetronome() { if (metronomeInterval) { clearInterval(metronomeInterval); metronomeInterval = null; } }
-
-async function startCountIn() {
-  return new Promise(resolve => {
-    countInActive = true;
-    let count = 3;
-    const div = document.getElementById('countin-display');
-    const num = document.getElementById('countin-number');
-    const bar = document.getElementById('countin-bar');
-    div.style.display = 'block';
-    num.textContent = count;
-    bar.style.width = '0%';
-    const interval = setInterval(() => {
-      if (count > 0) {
-        playClick(true);
-        num.textContent = count;
-        bar.style.width = `${((3 - count) / 3) * 100}%`;
-        count--;
-      } else {
-        clearInterval(interval);
-        num.textContent = 'GO!';
-        bar.style.width = '100%';
-        playClick(true);
-        setTimeout(() => { div.style.display = 'none'; countInActive = false; resolve(); }, 500);
-      }
-    }, 1000);
-  });
+async function loadAllTracks() {
+    if (!currentSong) return;
+    currentBuffers.clear();
+    for (const track of currentSong.tracks) {
+        try {
+            const buffer = await loadTrackAudio(track.audioUrl);
+            currentBuffers.set(track.id, buffer);
+        } catch (error) { console.error(`Failed to load track:`, error); }
+    }
 }
 
-async function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-
-async function loadTracks() {
-  if (!currentSong) return;
-  buffers.clear();
-  for (const t of currentSong.tracks) {
-    try {
-      const res = await fetch(t.audioUrl);
-      const buf = await res.arrayBuffer();
-      const audioBuf = await audioCtx.decodeAudioData(buf);
-      buffers.set(t.id, audioBuf);
-    } catch (e) { console.error(e); }
-  }
-}
-
-function scheduleTrack(track, offset, when = null) {
-  if (track.muted) return null;
-  const buf = buffers.get(track.id);
-  if (!buf) return null;
-  const src = audioCtx.createBufferSource();
-  const gain = audioCtx.createGain();
-  src.buffer = buf;
-  gain.gain.value = track.volume;
-  src.connect(gain);
-  gain.connect(audioCtx.destination);
-  const time = when !== null ? when : audioCtx.currentTime;
-  src.start(time, offset % buf.duration);
-  gains.set(track.id, gain);
-  sources.push(src);
-  return src;
+function scheduleTrack(track, startOffset, scheduledTime = null) {
+    if (track.muted) return null;
+    const buffer = currentBuffers.get(track.id);
+    if (!buffer) return null;
+    const source = currentAudioContext.createBufferSource();
+    const gain = currentAudioContext.createGain();
+    source.buffer = buffer;
+    gain.gain.value = track.volume;
+    source.connect(gain);
+    gain.connect(currentAudioContext.destination);
+    const when = scheduledTime !== null ? scheduledTime : currentAudioContext.currentTime;
+    const offset = startOffset % buffer.duration;
+    source.start(when, offset);
+    currentGains.set(track.id, gain);
+    currentSources.push(source);
+    return source;
 }
 
 async function startPlayback(recordMode = false) {
-  if (!currentSong) return false;
-  await initAudio();
-  if (recordMode && currentSong.tracks.some(t => t.username === currentUser.username)) { showToast('You already have a track!'); return false; }
-  await loadTracks();
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
-  isPlaying = true;
-  startTime = audioCtx.currentTime - currentPos;
-  for (const t of currentSong.tracks) if (!t.muted) scheduleTrack(t, currentPos);
-  if (recordMode) {
-    if (countInOn) await startCountIn();
-    startMetronome();
-    await startRecording();
-  }
-  document.getElementById('play-btn').textContent = '⏸️ Pause';
-  document.getElementById('play-btn').className = 'pause-btn';
-  socket.emit('transport-control', { songId: currentSong.id, action: 'play', position: currentPos, bpm });
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(() => { if (isPlaying) updateDisplay(audioCtx.currentTime - startTime); }, 50);
-  return true;
+    if (!currentSong) return false;
+    await initAudioContext();
+    const userHasTrack = currentSong.tracks.some(t => t.username === currentUser.username);
+    if (recordMode && userHasTrack) { alert('You already have a track in this version!'); return false; }
+    await loadAllTracks();
+    if (currentAudioContext.state === 'suspended') await currentAudioContext.resume();
+    isPlaying = true;
+    startTime = currentAudioContext.currentTime - currentPosition;
+    for (const track of currentSong.tracks) { if (!track.muted) scheduleTrack(track, currentPosition); }
+    if (recordMode) await startAudioRecording();
+    updateTransportUI('play');
+    startPositionTimer();
+    return true;
 }
 
 function pausePlayback() {
-  if (!isPlaying) return;
-  isPlaying = false;
-  if (isRecording) { stopRecording(); stopMetronome(); }
-  for (const s of sources) try { s.stop(); } catch(e) {}
-  sources = [];
-  gains.clear();
-  currentPos = audioCtx.currentTime - startTime;
-  document.getElementById('play-btn').textContent = '▶ Play';
-  document.getElementById('play-btn').className = 'play-btn';
-  socket.emit('transport-control', { songId: currentSong.id, action: 'pause', position: currentPos, bpm });
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (!isPlaying) return;
+    isPlaying = false;
+    if (isRecording) stopAudioRecording();
+    for (const source of currentSources) { try { source.stop(); } catch(e) {} }
+    currentSources = [];
+    currentGains.clear();
+    currentPosition = currentAudioContext.currentTime - startTime;
+    updateTransportUI('pause');
+    stopPositionTimer();
 }
 
 function stopPlayback() {
-  if (isPlaying) { if (isRecording) { stopRecording(); stopMetronome(); } pausePlayback(); }
-  currentPos = 0;
-  updateDisplay(0);
-  socket.emit('transport-control', { songId: currentSong.id, action: 'stop', position: 0, bpm });
+    if (isPlaying) { if (isRecording) stopAudioRecording(); pausePlayback(); }
+    currentPosition = 0;
+    updatePositionDisplay(0);
 }
 
-async function startRecording() {
-  try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = ['audio/webm', 'audio/mp4', 'audio/wav'].find(t => MediaRecorder.isTypeSupported(t)) || '';
-    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
-    chunks = [];
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      if (!chunks.length) return;
-      const blob = new Blob(chunks, { type: mime || 'audio/webm' });
-      const file = new File([blob], `recording-${Date.now()}.${mime.includes('webm') ? 'webm' : 'mp4'}`, { type: mime || 'audio/webm' });
-      const status = document.getElementById('recording-status');
-      status.innerHTML = '📤 Uploading...';
-      try {
-        await api.uploadTrack(currentSong.id, file);
-        showToast('Recording uploaded!');
-        currentSong = await api.getSong(currentSong.id);
-        displayTracks();
-        status.innerHTML = '✅ Saved!';
-        document.getElementById('record-btn').disabled = true;
-        document.getElementById('upload-btn').disabled = true;
-        setTimeout(() => status.innerHTML = '', 3000);
-        loadPublicFeed();
-      } catch(e) { status.innerHTML = '❌ Upload failed'; }
-      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-      chunks = [];
-    };
-    mediaRecorder.start(1000);
-    isRecording = true;
-    document.getElementById('record-btn').style.display = 'none';
-    document.getElementById('stop-record-btn').style.display = 'inline-block';
-    document.getElementById('recording-status').innerHTML = '🔴 RECORDING';
-    socket.emit('recording-started', { songId: currentSong.id, username: currentUser.username });
-  } catch(e) { showToast('Microphone access denied'); }
+async function startAudioRecording() {
+    try {
+        if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStream = stream;
+        const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/wav'];
+        let mimeType = '';
+        for (const type of mimeTypes) { if (MediaRecorder.isTypeSupported(type)) { mimeType = type; break; } }
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (event) => { if (event.data && event.data.size > 0) audioChunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+            if (audioChunks.length === 0) { document.getElementById('recording-status').innerHTML = '❌ No audio was recorded'; return; }
+            const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+            const file = new File([audioBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
+            document.getElementById('recording-status').innerHTML = '⏳ Uploading...';
+            try {
+                await api.uploadTrack(currentSong.id, file);
+                alert('Track added successfully!');
+                await new Promise(r => setTimeout(r, 500));
+                currentSong = await api.getSong(currentSong.id);
+                displayTracks();
+                document.getElementById('recording-status').innerHTML = '✅ Track added!';
+                document.getElementById('record-btn').disabled = true;
+                document.getElementById('upload-btn').disabled = true;
+                setTimeout(() => { document.getElementById('recording-status').innerHTML = ''; }, 3000);
+            } catch (error) {
+                document.getElementById('recording-status').innerHTML = '❌ Upload failed';
+            }
+            if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+            audioChunks = [];
+        };
+        mediaRecorder.start(1000);
+        isRecording = true;
+        document.getElementById('record-btn').style.display = 'none';
+        document.getElementById('stop-record-btn').style.display = 'inline-block';
+        document.getElementById('recording-status').innerHTML = '🔴 RECORDING...';
+    } catch (error) {
+        alert('Could not access microphone. Please check permissions.');
+        document.getElementById('record-btn').style.display = 'inline-block';
+        document.getElementById('stop-record-btn').style.display = 'none';
+        if (isPlaying) pausePlayback();
+    }
 }
 
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-  isRecording = false;
-  document.getElementById('record-btn').style.display = 'inline-block';
-  document.getElementById('stop-record-btn').style.display = 'none';
-  socket.emit('recording-stopped', { songId: currentSong.id, username: currentUser.username });
+function stopAudioRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('record-btn').style.display = 'inline-block';
+        document.getElementById('stop-record-btn').style.display = 'none';
+    }
 }
 
 async function startRecordingWithPlayback() {
-  if (!currentSong) return showToast('Select a song first');
-  if (isRecording) return showToast('Already recording');
-  if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track');
-  if (isPlaying) stopPlayback();
-  currentPos = 0;
-  updateDisplay(0);
-  await new Promise(r => setTimeout(r, 100));
-  await startPlayback(true);
+    if (!currentSong) { alert('Select a song first'); return; }
+    if (isRecording) { alert('Already recording!'); return; }
+    const userHasTrack = currentSong.tracks.some(t => t.username === currentUser.username);
+    if (userHasTrack) { alert('You already have a track in this version!'); return; }
+    if (isPlaying) { stopPlayback(); await new Promise(r => setTimeout(r, 200)); }
+    currentPosition = 0;
+    updatePositionDisplay(0);
+    await new Promise(r => setTimeout(r, 100));
+    await startPlayback(true);
 }
 
-function stopRecordingAndPlayback() {
-  if (isRecording) { stopRecording(); stopMetronome(); }
-  if (isPlaying) stopPlayback();
+async function deleteTrack(trackId) {
+    const track = currentSong.tracks.find(t => t.id === trackId);
+    if (!track || track.username !== currentUser.username) { alert('You can only delete your own tracks!'); return; }
+    if (!confirm('Delete your track? This cannot be undone.')) return;
+    try {
+        await api.deleteTrack(currentSong.id, trackId);
+        alert('Track deleted!');
+        await new Promise(r => setTimeout(r, 500));
+        currentSong = await api.getSong(currentSong.id);
+        displayTracks();
+        document.getElementById('record-btn').disabled = false;
+        document.getElementById('upload-btn').disabled = false;
+    } catch (error) { alert('Error deleting track'); }
 }
 
-function updateDisplay(pos) {
-  const m = Math.floor(pos / 60), s = Math.floor(pos % 60), ms = Math.floor((pos % 1) * 100);
-  document.getElementById('position-display').textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}:${ms.toString().padStart(2,'0')}`;
+async function uploadTrack() {
+    const fileInput = document.getElementById('audio-file');
+    const file = fileInput.files[0];
+    if (!file) { alert('Select an audio file'); return; }
+    if (currentSong.tracks.some(t => t.username === currentUser.username)) { alert('You already have a track in this version!'); return; }
+    document.getElementById('recording-status').innerHTML = '⏳ Uploading...';
+    try {
+        await api.uploadTrack(currentSong.id, file);
+        alert('Track uploaded!');
+        fileInput.value = '';
+        await new Promise(r => setTimeout(r, 500));
+        currentSong = await api.getSong(currentSong.id);
+        displayTracks();
+        document.getElementById('recording-status').innerHTML = '✅ Uploaded!';
+        document.getElementById('record-btn').disabled = true;
+        document.getElementById('upload-btn').disabled = true;
+        setTimeout(() => { document.getElementById('recording-status').innerHTML = ''; }, 3000);
+    } catch (error) { document.getElementById('recording-status').innerHTML = '❌ Upload failed'; }
 }
 
-// Public Feed Functions
-async function loadPublicFeed() {
-  try {
-    const feed = await api.getPublicFeed();
-    
-    // Display trending songs
-    const trendingContainer = document.getElementById('trending-songs');
-    if (feed.trendingSongs && feed.trendingSongs.length) {
-      trendingContainer.innerHTML = feed.trendingSongs.map(song => `
-        <div class="trending-card" onclick="selectSong('${song.id}')">
-          <img src="${song.thumbnail}" alt="${escape(song.title)}">
-          <div class="trending-info">
-            <div class="trending-title">${escape(song.title)}</div>
-            <div class="trending-creator" onclick="event.stopPropagation(); viewUser('${song.creator}')">${escape(song.creator)}</div>
-            <div class="trending-stats">👍 ${song.likes} likes • 🎵 ${song.trackCount} tracks</div>
-          </div>
-        </div>
-      `).join('');
-    } else {
-      trendingContainer.innerHTML = '<div class="loading">No trending tracks yet</div>';
-    }
-    
-    // Display recent songs
-    const recentContainer = document.getElementById('recent-songs');
-    if (feed.recentSongs && feed.recentSongs.length) {
-      recentContainer.innerHTML = feed.recentSongs.map(song => `
-        <div class="song-card" onclick="selectSong('${song.id}')">
-          <img class="song-thumb" src="${song.thumbnail}" alt="${escape(song.title)}">
-          <div class="song-info">
-            <div class="song-title">${escape(song.title)} ${song.isNew ? '<span class="new-badge">NEW</span>' : ''}</div>
-            <div class="song-creator" onclick="event.stopPropagation(); viewUser('${song.creator}')">${escape(song.creator)}</div>
-            <div class="song-stats">🎵 ${song.trackCount} tracks | 👍 ${song.likes} likes | 🎚️ ${song.bpm} BPM</div>
-          </div>
-        </div>
-      `).join('');
-    } else {
-      recentContainer.innerHTML = '<div class="loading">No recent tracks yet</div>';
-    }
-    
-    // Display new users
-    const usersContainer = document.getElementById('new-users');
-    if (feed.recentUsers && feed.recentUsers.length) {
-      usersContainer.innerHTML = feed.recentUsers.map(user => `
-        <div class="user-card">
-          <img class="user-avatar" src="${user.avatar}" alt="${escape(user.username)}" onclick="viewUser('${user.username}')">
-          <div class="user-info">
-            <div class="user-name" onclick="viewUser('${user.username}')">${escape(user.username)} ${user.isNew ? '<span class="new-badge">NEW</span>' : ''}</div>
-            <div class="user-bio">${escape(user.bio.substring(0, 50))}</div>
-            <div class="user-stats">👥 ${user.followersCount} followers • 🎵 ${user.tracksCount} tracks</div>
-          </div>
-          <button class="follow-small-btn ${user.isFollowing ? 'following' : ''}" onclick="followFromFeed('${user.username}', this)">${user.isFollowing ? 'Following' : 'Follow'}</button>
-        </div>
-      `).join('');
-    } else {
-      usersContainer.innerHTML = '<div class="loading">No new creators yet</div>';
-    }
-  } catch(e) { console.error('Error loading feed:', e); }
+function startPositionTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        if (isPlaying) updatePositionDisplay(currentAudioContext.currentTime - startTime);
+    }, 50);
 }
 
-async function followFromFeed(username, btn) {
-  try {
-    const res = await api.followUser(username);
-    if (res.following) {
-      btn.textContent = 'Following';
-      btn.classList.add('following');
-      showToast(`Following ${username}`);
-      if (!currentUser.following.includes(username)) currentUser.following.push(username);
-    } else {
-      btn.textContent = 'Follow';
-      btn.classList.remove('following');
-      showToast(`Unfollowed ${username}`);
-      currentUser.following = currentUser.following.filter(u => u !== username);
-    }
-    loadPublicFeed();
-  } catch(e) { showToast('Error following user'); }
+function stopPositionTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+
+function updatePositionDisplay(position) {
+    const minutes = Math.floor(position / 60);
+    const seconds = Math.floor(position % 60);
+    const ms = Math.floor((position % 1) * 100);
+    document.getElementById('position-display').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${ms.toString().padStart(2, '0')}`;
 }
 
-// Library Functions
+function updateTransportUI(action) {
+    const playBtn = document.getElementById('play-btn');
+    if (action === 'play') { playBtn.textContent = '⏸ Pause'; playBtn.className = 'pause-btn'; }
+    else { playBtn.textContent = '▶ Play'; playBtn.className = 'play-btn'; }
+}
+
+async function updateBpm(newBpm) {
+    if (!currentSong) return;
+    const isOwner = currentSong.creator === currentUser.username;
+    if (!isOwner) { alert('Only the version owner can change BPM'); document.getElementById('bpm-input').value = currentSong.bpm; return; }
+    newBpm = Math.min(300, Math.max(40, parseInt(newBpm)));
+    try {
+        await api.updateBpm(currentSong.id, newBpm);
+        currentSong.bpm = newBpm;
+        bpm = newBpm;
+    } catch (error) { alert('Failed to update BPM'); document.getElementById('bpm-input').value = currentSong.bpm; }
+}
+
 async function loadSongs() {
-  try {
-    const songs = await api.getSongs();
-    const container = document.getElementById('song-list');
-    if (!songs.length) { container.innerHTML = '<div class="loading">No tracks yet. Create one!</div>'; return; }
-    container.innerHTML = songs.map(s => `
-      <div class="song-card" onclick="selectSong('${s.id}')">
-        <img class="song-thumb" src="${s.thumbnail}">
-        <div class="song-info">
-          <div class="song-title">${escape(s.title)}</div>
-          <div class="song-creator" onclick="event.stopPropagation(); viewUser('${s.creator}')">${escape(s.creator)}</div>
-          <div class="song-stats">🎵 ${s.trackCount} tracks | 👍 ${s.likes} likes | 🎚️ ${s.bpm} BPM</div>
-        </div>
-      </div>
-    `).join('');
-    const search = document.getElementById('library-search');
-    if (search) search.oninput = (e) => {
-      const term = e.target.value.toLowerCase();
-      document.querySelectorAll('#song-list .song-card').forEach(card => {
-        const title = card.querySelector('.song-title')?.innerText.toLowerCase() || '';
-        const creator = card.querySelector('.song-creator')?.innerText.toLowerCase() || '';
-        card.style.display = (title.includes(term) || creator.includes(term)) ? 'flex' : 'none';
-      });
-    };
-  } catch(e) { console.error(e); }
+    if (isRefreshing) return;
+    try {
+        const songs = await api.getSongs();
+        displaySongList(songs);
+    } catch (error) { setTimeout(() => loadSongs(), 2000); }
 }
 
-async function selectSong(id) {
-  try {
-    if (isPlaying) stopPlayback();
-    if (isRecording) stopRecording();
-    if (metronomeInterval) clearInterval(metronomeInterval);
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    if (audioCtx) await audioCtx.close();
-    buffers.clear(); sources = []; gains.clear();
-    audioCtx = null;
-    currentSong = await api.getSong(id);
-    document.getElementById('current-song-title').textContent = currentSong.title;
-    document.getElementById('song-creator').innerHTML = `Created by <span style="color:#667eea;cursor:pointer" onclick="viewUser('${currentSong.creator}')">${escape(currentSong.creator)}</span> • ${currentSong.genre} • ${currentSong.bpm} BPM`;
-    document.getElementById('bpm-input').value = currentSong.bpm;
-    bpm = currentSong.bpm;
-    socket.emit('join-song', id);
-    displayTracks();
-    const hasTrack = currentSong.tracks.some(t => t.username === currentUser.username);
-    document.getElementById('record-btn').disabled = hasTrack;
-    document.getElementById('upload-btn').disabled = hasTrack;
-    currentPos = 0;
-    updateDisplay(0);
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.querySelector('.nav-item[data-view="studio"]').classList.add('active');
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('studio-view').classList.add('active');
-  } catch(e) { showToast('Error loading song'); }
+function displaySongList(songs) {
+    const container = document.getElementById('song-list');
+    if (songs.length === 0) { container.innerHTML = '<div style="text-align: center; padding: 20px;">No songs yet. Create the first one!</div>'; return; }
+    container.innerHTML = songs.map(song => `
+        <div class="song-item" onclick="selectSong('${song.id}')">
+            <img class="song-thumbnail" src="${song.thumbnail}" onerror="this.src='https://picsum.photos/id/20/50/50'">
+            <div class="song-info">
+                <div class="song-title">${escapeHtml(song.title)} <span class="version-badge">v${song.version}</span></div>
+                <div class="song-creator">by ${escapeHtml(song.creator)}</div>
+                <div class="song-stats">🎵 ${song.trackCount} tracks | 👍 ${song.upvotes} votes</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function selectSong(songId) {
+    if (isRefreshing) return;
+    try {
+        isRefreshing = true;
+        if (isPlaying) stopPlayback();
+        if (isRecording) stopAudioRecording();
+        if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+        if (currentAudioContext) { await currentAudioContext.close(); currentAudioContext = null; }
+        currentBuffers.clear();
+        currentSources = [];
+        currentGains.clear();
+        currentSong = await api.getSong(songId);
+        document.getElementById('daw-area').style.display = 'flex';
+        document.getElementById('current-song-title').innerHTML = `${escapeHtml(currentSong.title)} <span class="version-badge">v${currentSong.version}</span>`;
+        document.getElementById('song-creator').textContent = `Created by ${currentSong.creator} • ${currentSong.genre} • ${currentSong.bpm} BPM`;
+        const bpmInput = document.getElementById('bpm-input');
+        bpmInput.value = currentSong.bpm;
+        bpmInput.disabled = currentSong.creator !== currentUser.username;
+        bpm = currentSong.bpm;
+        socket.emit('join-song', songId);
+        displayTracks();
+        displayComments();
+        const userTrack = currentSong.tracks.find(t => t.username === currentUser.username);
+        document.getElementById('record-btn').disabled = !!userTrack;
+        document.getElementById('upload-btn').disabled = !!userTrack;
+        document.getElementById('record-btn').style.display = 'inline-block';
+        document.getElementById('stop-record-btn').style.display = 'none';
+        isPlaying = false;
+        currentPosition = 0;
+        updatePositionDisplay(0);
+    } catch (error) { console.error(error); alert('Error loading song'); }
+    finally { isRefreshing = false; }
 }
 
 function displayTracks() {
-  const container = document.getElementById('track-mixer');
-  const tracks = currentSong.tracks || [];
-  if (!tracks.length) { container.innerHTML = '<div class="loading">No tracks yet. Add your sound!</div>'; return; }
-  container.innerHTML = tracks.map((t, i) => `
-    <div class="track-card ${t.muted ? 'muted' : ''}">
-      <div class="track-row">
-        <div><span class="track-name">🎧 ${escape(t.username)}${t.username === currentUser.username ? '<span class="your-track"> (Your Track)</span>' : ''}</span>
-        <div class="track-creator" onclick="viewUser('${t.username}')">Added ${new Date(t.uploadedAt).toLocaleDateString()}</div></div>
-        <div class="track-votes">👍 ${t.votes || 0}</div>
-      </div>
-      <div class="track-controls">
-        <button class="${t.muted ? 'unmute-btn' : 'mute-btn'}" onclick="toggleMute('${t.id}')">${t.muted ? '🔊 Unmute' : '🔇 Mute'}</button>
-        <button class="vote-btn" onclick="voteTrack('${t.id}', 'up')">👍 Upvote</button>
-        <button class="vote-btn" onclick="voteTrack('${t.id}', 'down')">👎 Downvote</button>
-        <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="${t.volume || 0.8}" onchange="adjustVolume('${t.id}', this.value)">
-        ${t.username === currentUser.username ? `<button class="delete-btn" onclick="deleteTrack('${t.id}')">🗑️ Delete</button>` : ''}
-      </div>
-    </div>
-  `).join('');
+    const container = document.getElementById('track-mixer');
+    const tracks = currentSong.tracks;
+    if (tracks.length === 0) { container.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">✨ No tracks yet. Be the first to add your sound! ✨</div>'; return; }
+    container.innerHTML = tracks.map((track, index) => {
+        const isCurrentUserTrack = track.username === currentUser?.username;
+        return `
+            <div class="track ${track.muted ? 'muted' : ''}" id="track-${track.id}">
+                <div style="width: 40px; text-align: center; font-size: 20px;">${isCurrentUserTrack ? '⭐' : '🎵'}</div>
+                <div class="track-info">
+                    <div class="track-name">Track ${index + 1}: ${escapeHtml(track.username)} ${isCurrentUserTrack ? '<span style="color: #f39c12;"> (Your Track)</span>' : ''}</div>
+                    <div class="track-creator">Added ${new Date(track.uploadedAt).toLocaleDateString()}</div>
+                </div>
+                <div class="track-controls">
+                    <button class="mute-btn" onclick="toggleMute('${track.id}')">${track.muted ? 'Unmute' : 'Mute'}</button>
+                    <button class="vote-btn" onclick="voteTrack('${track.id}', 'up')">👍</button>
+                    <span class="track-votes">${track.votes || 0}</span>
+                    <button class="vote-btn" onclick="voteTrack('${track.id}', 'down')">👎</button>
+                    <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="${track.volume || 0.8}" onchange="adjustVolume('${track.id}', this.value)">
+                    ${isCurrentUserTrack ? `<button class="delete-btn" onclick="deleteTrack('${track.id}')">🗑️ Delete</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
-async function toggleMute(id) {
-  const track = currentSong.tracks.find(t => t.id === id);
-  if (track) {
-    track.muted = !track.muted;
-    if (isPlaying) { const pos = currentPos; pausePlayback(); currentPos = pos; await startPlayback(false); }
-    displayTracks();
-    await fetch(`/api/songs/${currentSong.id}/track/${id}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ muted: track.muted }) });
-    socket.emit('track-update', { songId: currentSong.id, trackId: id, updates: { muted: track.muted } });
-  }
+function displayComments() {
+    const container = document.getElementById('comments-list');
+    const comments = currentSong.comments || [];
+    if (comments.length === 0) { container.innerHTML = '<div style="text-align: center; color: #888;">No comments yet</div>'; return; }
+    container.innerHTML = comments.map(comment => `
+        <div class="comment">
+            <strong>${escapeHtml(comment.username)}</strong>: ${escapeHtml(comment.text)}
+            <br><small>${new Date(comment.createdAt).toLocaleString()}</small>
+        </div>
+    `).join('');
 }
 
-async function adjustVolume(id, vol) {
-  const track = currentSong.tracks.find(t => t.id === id);
-  if (track) {
-    track.volume = parseFloat(vol);
-    const gain = gains.get(id);
-    if (gain) gain.gain.value = track.volume;
-    await fetch(`/api/songs/${currentSong.id}/track/${id}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ volume: track.volume }) });
-  }
+async function voteTrack(trackId, vote) {
+    try {
+        const result = await api.voteTrack(currentSong.id, trackId, vote);
+        const track = currentSong.tracks.find(t => t.id === trackId);
+        if (track) track.votes = result.votes;
+        displayTracks();
+    } catch (error) { alert('Error voting'); }
 }
 
-async function voteTrack(id, vote) {
-  try {
-    const res = await api.voteTrack(currentSong.id, id, vote);
-    const track = currentSong.tracks.find(t => t.id === id);
-    if (track) track.votes = res.votes;
-    displayTracks();
-    loadPublicFeed();
-  } catch(e) { showToast('Error voting'); }
+function toggleMute(trackId) {
+    const track = currentSong.tracks.find(t => t.id === trackId);
+    if (track) {
+        track.muted = !track.muted;
+        displayTracks();
+        if (isPlaying) {
+            const currentPos = currentPosition;
+            pausePlayback();
+            currentPosition = currentPos;
+            startPlayback(false);
+        }
+        socket.emit('track-update', { songId: currentSong.id, trackId, updates: { muted: track.muted } });
+    }
 }
 
-async function deleteTrack(id) {
-  if (!confirm('Delete your track? Cannot undo.')) return;
-  await api.deleteTrack(currentSong.id, id);
-  currentSong = await api.getSong(currentSong.id);
-  displayTracks();
-  document.getElementById('record-btn').disabled = false;
-  document.getElementById('upload-btn').disabled = false;
-  loadPublicFeed();
-  loadSongs();
+function adjustVolume(trackId, volume) {
+    const track = currentSong.tracks.find(t => t.id === trackId);
+    if (track) {
+        track.volume = parseFloat(volume);
+        const gain = currentGains.get(trackId);
+        if (gain) gain.gain.value = track.volume;
+        socket.emit('track-update', { songId: currentSong.id, trackId, updates: { volume: track.volume } });
+    }
+}
+
+async function postComment() {
+    const text = document.getElementById('comment-text').value;
+    if (!text.trim()) return;
+    try {
+        await api.addComment(currentSong.id, text);
+        document.getElementById('comment-text').value = '';
+        currentSong = await api.getSong(currentSong.id);
+        displayComments();
+    } catch (error) { alert('Error posting comment'); }
 }
 
 async function createSong() {
-  const title = document.getElementById('new-title').value;
-  let b = parseInt(document.getElementById('new-bpm').value);
-  const genre = document.getElementById('new-genre').value;
-  if (!title) return showToast('Enter a title');
-  b = Math.min(300, Math.max(40, b || 120));
-  const song = await api.createSong({ title, bpm: b, genre });
-  showToast('Song created!');
-  document.getElementById('create-modal').style.display = 'none';
-  document.getElementById('new-title').value = '';
-  loadSongs();
-  loadPublicFeed();
-  selectSong(song.id);
+    const title = document.getElementById('new-song-title').value;
+    let bpm = parseInt(document.getElementById('new-song-bpm').value);
+    const genre = document.getElementById('new-song-genre').value;
+    if (!title) { alert('Enter a song title'); return; }
+    if (isNaN(bpm)) bpm = 120;
+    bpm = Math.min(300, Math.max(40, bpm));
+    try {
+        const newSong = await api.createSong({ title, bpm, genre });
+        alert('Song created!');
+        document.getElementById('create-modal').style.display = 'none';
+        document.getElementById('new-song-title').value = '';
+        await selectSong(newSong.id);
+        loadSongs();
+    } catch (error) { alert('Error creating song'); }
 }
 
-async function uploadTrackFile() {
-  const file = document.getElementById('audio-file').files[0];
-  if (!file) return showToast('Select a file');
-  if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track');
-  await api.uploadTrack(currentSong.id, file);
-  showToast('Track uploaded!');
-  currentSong = await api.getSong(currentSong.id);
-  displayTracks();
-  document.getElementById('record-btn').disabled = true;
-  document.getElementById('upload-btn').disabled = true;
-  loadPublicFeed();
+async function forkSong() {
+    if (!currentSong) return;
+    const title = prompt('New version title:', `${currentSong.title} (Fork)`);
+    if (!title) return;
+    try {
+        const newSong = await api.createSong({ title, bpm: currentSong.bpm, genre: currentSong.genre, parentVersion: currentSong.id });
+        alert('Version forked! You are now the owner of this new version.');
+        await selectSong(newSong.id);
+        loadSongs();
+    } catch (error) { alert('Error forking song'); }
+}
+
+async function changeThumbnail() {
+    const modal = document.getElementById('thumbnail-modal');
+    const grid = document.getElementById('thumbnail-grid');
+    grid.innerHTML = thumbnailOptions.map(url => `<img class="thumbnail-option" src="${url}" onclick="document.getElementById('thumbnail-url').value='${url}'">`).join('');
+    modal.style.display = 'flex';
+}
+
+async function applyThumbnail() {
+    const url = document.getElementById('thumbnail-url').value;
+    if (!url) { alert('Select or enter a thumbnail URL'); return; }
+    try {
+        await api.updateThumbnailUrl(currentSong.id, url);
+        currentSong.thumbnail = url;
+        document.getElementById('thumbnail-modal').style.display = 'none';
+        document.getElementById('thumbnail-url').value = '';
+        loadSongs();
+        alert('Thumbnail updated!');
+    } catch (error) { alert('Error updating thumbnail'); }
 }
 
 function backToLibrary() {
-  if (isPlaying) stopPlayback();
-  if (isRecording) stopRecording();
-  if (metronomeInterval) clearInterval(metronomeInterval);
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
-  if (socket && currentSong) socket.emit('leave-song', currentSong.id);
-  currentSong = null;
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector('.nav-item[data-view="library"]').classList.add('active');
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('library-view').classList.add('active');
-  loadSongs();
-}
-
-// Profile
-async function loadProfile() {
-  const container = document.getElementById('profile-content');
-  try {
-    const user = await api.getUser(currentUser.username);
-    container.innerHTML = `
-      <div class="profile-header">
-        <img class="profile-avatar" src="${user.avatar}"><h2>${escape(user.username)}</h2>
-        <p class="profile-bio">${escape(user.bio || 'Music creator on TrackStars')}</p>
-        <button class="edit-profile-btn" id="edit-profile-btn">✏️ Edit Profile</button>
-        <div class="stats-row"><div><span>${user.followers?.length || 0}</span><label>Followers</label></div><div><span>${user.following?.length || 0}</span><label>Following</label></div><div><span>${user.contributedTo?.length || 0}</span><label>Tracks</label></div></div>
-      </div>
-      <div><h3>My Tracks</h3><div id="my-tracks-list"></div></div>
-    `;
-    const songs = await api.getSongs();
-    const mySongs = songs.filter(s => s.creator === currentUser.username);
-    const tracksDiv = document.getElementById('my-tracks-list');
-    if (!mySongs.length) tracksDiv.innerHTML = '<div class="loading">No tracks yet</div>';
-    else tracksDiv.innerHTML = mySongs.map(s => `<div class="song-card" onclick="selectSong('${s.id}')"><img class="song-thumb" src="${s.thumbnail}"><div class="song-info"><div class="song-title">${escape(s.title)}</div><div class="song-stats">🎵 ${s.trackCount} tracks | 👍 ${s.likes}</div></div></div>`).join('');
-    document.getElementById('edit-profile-btn').onclick = openProfileModal;
-  } catch(e) { container.innerHTML = '<div class="loading">Error</div>'; }
-}
-
-async function openProfileModal() {
-  const user = await api.getUser(currentUser.username);
-  document.getElementById('edit-avatar').src = user.avatar;
-  document.getElementById('edit-bio').value = user.bio || '';
-  document.getElementById('edit-followers').textContent = user.followers?.length || 0;
-  document.getElementById('edit-following').textContent = user.following?.length || 0;
-  document.getElementById('edit-tracks').textContent = user.contributedTo?.length || 0;
-  document.getElementById('profile-modal').style.display = 'flex';
-}
-
-async function saveProfile() {
-  const bio = document.getElementById('edit-bio').value;
-  await api.updateBio(bio);
-  showToast('Profile updated');
-  document.getElementById('profile-modal').style.display = 'none';
-  loadProfile();
-}
-
-async function uploadAvatar(file) {
-  const res = await api.uploadAvatar(file);
-  currentUser.avatar = res.avatar;
-  document.getElementById('header-avatar').src = res.avatar;
-  showToast('Avatar updated');
-}
-
-// Chat
-async function loadChatUsers() {
-  const container = document.getElementById('chat-users');
-  try {
-    const users = await api.getUsers();
-    const others = users.filter(u => u.username !== currentUser.username);
-    if (!others.length) { container.innerHTML = '<div class="loading">No other users</div>'; return; }
-    container.innerHTML = others.map(u => `<div class="chat-user" onclick="startChat('${u.username}')"><img src="${u.avatar}"><div><strong>${escape(u.username)}</strong><div style="font-size:11px;color:#888">${u.followersCount} followers</div></div></div>`).join('');
-    document.getElementById('chat-conversation').style.display = 'none';
-  } catch(e) { container.innerHTML = '<div class="loading">Error</div>'; }
-}
-
-async function startChat(username) {
-  currentChatUser = username;
-  document.getElementById('chat-users').style.display = 'none';
-  document.getElementById('chat-conversation').style.display = 'flex';
-  document.getElementById('chat-with').textContent = username;
-  await loadConversation(username);
-}
-
-async function loadConversation(username) {
-  const msgs = await api.getMessages(username);
-  const container = document.getElementById('chat-messages');
-  container.innerHTML = msgs.map(m => `<div class="message ${m.from === currentUser.username ? 'sent' : 'received'}"><div>${escape(m.text)}</div><div class="message-time">${new Date(m.timestamp).toLocaleTimeString()}</div></div>`).join('');
-  container.scrollTop = container.scrollHeight;
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text || !currentChatUser) return;
-  await api.sendMessage(currentChatUser, text);
-  input.value = '';
-  await loadConversation(currentChatUser);
-}
-
-function backToUsers() {
-  document.getElementById('chat-conversation').style.display = 'none';
-  document.getElementById('chat-users').style.display = 'block';
-  currentChatUser = null;
-}
-
-// View other user profile
-async function viewUser(username) {
-  try {
-    const user = await api.getUser(username);
-    const isFollowing = currentUser.following?.includes(username);
-    const modal = document.getElementById('user-modal');
-    document.getElementById('user-modal-content').innerHTML = `
-      <div class="user-profile-detail">
-        <img class="view-avatar" src="${user.avatar}">
-        <h2>${escape(user.username)}</h2>
-        <p class="view-bio">${escape(user.bio || 'Music creator')}</p>
-        <div><button class="follow-btn ${isFollowing ? 'following' : ''}" onclick="followUser('${username}', this)">${isFollowing ? 'Following' : 'Follow'}</button>
-        <button class="message-btn" onclick="startChat('${username}'); document.getElementById('user-modal').style.display = 'none';">💬 Message</button></div>
-        <div class="stats-row"><div><span>${user.followers?.length || 0}</span><label>Followers</label></div><div><span>${user.following?.length || 0}</span><label>Following</label></div><div><span>${user.contributedTo?.length || 0}</span><label>Tracks</label></div></div>
-        <div><h4>🎵 Tracks</h4><div id="user-tracks-list"></div></div>
-      </div>
-    `;
-    const songs = await api.getSongs();
-    const userSongs = songs.filter(s => user.contributedTo?.includes(s.id) || s.creator === username);
-    const tracksDiv = document.getElementById('user-tracks-list');
-    if (!userSongs.length) tracksDiv.innerHTML = '<div style="color:#888;text-align:center">No tracks yet</div>';
-    else tracksDiv.innerHTML = userSongs.map(s => `<div class="song-card" onclick="selectSong('${s.id}'); document.getElementById('user-modal').style.display = 'none';"><img class="song-thumb" src="${s.thumbnail}"><div class="song-info"><div class="song-title">${escape(s.title)}</div><div class="song-stats">🎵 ${s.trackCount} tracks</div></div></div>`).join('');
-    modal.style.display = 'flex';
-  } catch(e) { showToast('Error loading profile'); }
-}
-
-async function followUser(username, btn) {
-  const res = await api.followUser(username);
-  if (res.following) { btn.textContent = 'Following'; btn.classList.add('following'); showToast(`Following ${username}`); }
-  else { btn.textContent = 'Follow'; btn.classList.remove('following'); showToast(`Unfollowed ${username}`); }
-  if (res.following && !currentUser.following.includes(username)) currentUser.following.push(username);
-  else if (!res.following) currentUser.following = currentUser.following.filter(u => u !== username);
-  loadPublicFeed();
-}
-
-// Socket
-function initSocket() {
-  socket = io();
-  socket.on('connect', () => console.log('Socket connected'));
-  socket.on('track-added', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadPublicFeed(); });
-  socket.on('track-deleted', async data => { if (currentSong?.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadPublicFeed(); });
-  socket.on('track-updated', data => { if (currentSong) { const t = currentSong.tracks.find(tr => tr.id === data.trackId); if (t && data.updates) { if (data.updates.muted !== undefined) t.muted = data.updates.muted; if (data.updates.volume !== undefined) t.volume = data.updates.volume; displayTracks(); } } });
-  socket.on('transport-state', state => { if (state.bpm && state.bpm !== bpm && currentSong) { bpm = state.bpm; document.getElementById('bpm-input').value = bpm; } });
-  socket.on('user-recording', data => showToast(`${data.username} is recording...`));
-  socket.on('new-message', msg => { if (currentChatUser === msg.from) loadConversation(msg.from); showToast(`New message from ${msg.from}`); });
-  socket.emit('join-chat', currentUser.username);
-}
-
-// Navigation
-function initNav() {
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.onclick = () => {
-      const view = btn.dataset.view;
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(`${view}-view`).classList.add('active');
-      if (view === 'profile') loadProfile();
-      if (view === 'social') loadChatUsers();
-      if (view === 'library') loadSongs();
-      if (view === 'feed') loadPublicFeed();
-    };
-  });
-}
-
-// Utility
-function escape(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
-function showToast(msg, duration = 3000) { let toast = document.querySelector('.toast'); if (toast) toast.remove(); toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; document.body.appendChild(toast); setTimeout(() => toast.remove(), duration); }
-
-// Event Listeners
-function setupListeners() {
-  document.querySelectorAll('.auth-tab').forEach(t => t.onclick = () => {
-    const tab = t.dataset.tab;
-    document.querySelectorAll('.auth-tab').forEach(tt => tt.classList.remove('active'));
-    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-    t.classList.add('active');
-    document.getElementById(`${tab}-form`).classList.add('active');
-  });
-  document.getElementById('login-form').onsubmit = async e => {
-    e.preventDefault();
-    try { await login(document.getElementById('login-username').value, document.getElementById('login-password').value);
-      document.getElementById('auth-modal').style.display = 'none';
-      document.getElementById('main-app').style.display = 'block';
-      document.getElementById('current-user').textContent = currentUser.username;
-      document.getElementById('header-avatar').src = currentUser.avatar;
-      initSocket(); loadSongs(); loadPublicFeed(); initNav();
-    } catch(err) { document.getElementById('login-error').textContent = err.message; }
-  };
-  document.getElementById('register-form').onsubmit = async e => {
-    e.preventDefault();
-    try { await register(document.getElementById('reg-username').value, document.getElementById('reg-email').value, document.getElementById('reg-password').value, document.getElementById('reg-confirm').value);
-      document.getElementById('auth-modal').style.display = 'none';
-      document.getElementById('main-app').style.display = 'block';
-      document.getElementById('current-user').textContent = currentUser.username;
-      document.getElementById('header-avatar').src = currentUser.avatar;
-      initSocket(); loadSongs(); loadPublicFeed(); initNav();
-    } catch(err) { document.getElementById('register-error').textContent = err.message; }
-  };
-  document.getElementById('logout-btn').onclick = logout;
-  document.getElementById('header-avatar').onclick = openProfileModal;
-  document.querySelector('.username').onclick = openProfileModal;
-  document.querySelector('.close-modal').onclick = () => document.getElementById('profile-modal').style.display = 'none';
-  document.getElementById('save-profile').onclick = saveProfile;
-  document.getElementById('change-avatar').onclick = () => document.getElementById('avatar-file').click();
-  document.getElementById('avatar-file').onchange = e => { if (e.target.files[0]) uploadAvatar(e.target.files[0]); };
-  document.getElementById('open-create-modal').onclick = () => document.getElementById('create-modal').style.display = 'flex';
-  document.getElementById('confirm-create').onclick = createSong;
-  document.getElementById('cancel-create').onclick = () => document.getElementById('create-modal').style.display = 'none';
-  document.getElementById('random-thumb').onclick = () => { const title = document.getElementById('new-title').value || 'track'; document.getElementById('thumb-preview').src = `https://ui-avatars.com/api/?background=${Math.floor(Math.random()*16777215).toString(16)}&color=fff&size=200&name=${encodeURIComponent(title.substring(0,2))}`; };
-  document.getElementById('play-btn').onclick = () => isPlaying ? pausePlayback() : startPlayback(false);
-  document.getElementById('stop-btn').onclick = stopPlayback;
-  document.getElementById('bpm-input').onchange = e => setBpm(parseInt(e.target.value));
-  document.getElementById('record-btn').onclick = startRecordingWithPlayback;
-  document.getElementById('stop-record-btn').onclick = stopRecordingAndPlayback;
-  document.getElementById('upload-btn').onclick = () => document.getElementById('audio-file').click();
-  document.getElementById('audio-file').onchange = uploadTrackFile;
-  document.getElementById('back-btn').onclick = backToLibrary;
-  document.getElementById('metronome-toggle').onchange = e => { metronomeOn = e.target.checked; if (isRecording && !countInActive) metronomeOn ? startMetronome() : stopMetronome(); };
-  document.getElementById('countin-toggle').onchange = e => countInOn = e.target.checked;
-  document.getElementById('back-to-users').onclick = backToUsers;
-  document.getElementById('send-chat').onclick = sendChatMessage;
-  document.getElementById('chat-input').onkeypress = e => { if (e.key === 'Enter') sendChatMessage(); };
-  document.querySelector('.close-user-modal').onclick = () => document.getElementById('user-modal').style.display = 'none';
-  document.getElementById('user-modal').onclick = e => { if (e.target === document.getElementById('user-modal')) document.getElementById('user-modal').style.display = 'none'; };
-  document.getElementById('profile-modal').onclick = e => { if (e.target === document.getElementById('profile-modal')) document.getElementById('profile-modal').style.display = 'none'; };
-  document.getElementById('create-modal').onclick = e => { if (e.target === document.getElementById('create-modal')) document.getElementById('create-modal').style.display = 'none'; };
-}
-
-function setBpm(newBpm) {
-  bpm = Math.min(300, Math.max(40, newBpm));
-  if (isRecording && !countInActive) { stopMetronome(); startMetronome(); }
-  socket.emit('transport-control', { songId: currentSong?.id, action: 'setBpm', bpm });
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  const savedToken = localStorage.getItem('token');
-  const savedUser = localStorage.getItem('user');
-  if (savedToken && savedUser) {
-    token = savedToken;
-    currentUser = JSON.parse(savedUser);
-    document.getElementById('auth-modal').style.display = 'none';
-    document.getElementById('main-app').style.display = 'block';
-    document.getElementById('current-user').textContent = currentUser.username;
-    document.getElementById('header-avatar').src = currentUser.avatar;
-    initSocket();
+    if (isPlaying) stopPlayback();
+    if (isRecording) stopAudioRecording();
+    if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+    if (currentAudioContext) { currentAudioContext.close(); currentAudioContext = null; }
+    document.getElementById('daw-area').style.display = 'none';
+    if (socket && currentSong) socket.emit('leave-song', currentSong.id);
+    currentSong = null;
     loadSongs();
-    loadPublicFeed();
-    initNav();
-    setupListeners();
-  } else {
-    document.getElementById('auth-modal').style.display = 'flex';
-    document.getElementById('main-app').style.display = 'none';
-    setupListeners();
-  }
+}
+
+// Chat Functions
+async function loadConversations() {
+    try {
+        const conversations = await api.getConversations();
+        const container = document.getElementById('conversations-list');
+        if (conversations.length === 0) { container.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">No messages yet</div>'; return; }
+        container.innerHTML = conversations.map(conv => `
+            <div class="conversation-item" onclick="openChat('${conv.username}')">
+                <img class="conversation-avatar" src="https://picsum.photos/id/20/40/40">
+                <div class="conversation-info">
+                    <div class="conversation-name">${escapeHtml(conv.username)}</div>
+                    <div class="conversation-last">${escapeHtml(conv.lastMessage.substring(0, 50))}</div>
+                </div>
+                ${conv.unread ? '<div class="unread-badge"></div>' : ''}
+            </div>
+        `).join('');
+    } catch (error) { console.error(error); }
+}
+
+async function openChat(username) {
+    activeChat = username;
+    document.getElementById('conversations-list').style.display = 'none';
+    document.getElementById('chat-messages').style.display = 'flex';
+    document.getElementById('chat-input-area').style.display = 'flex';
+    document.querySelector('.chat-header h3').textContent = `Chat with ${username}`;
+    await api.markMessagesRead(username);
+    await loadMessages(username);
+}
+
+async function loadMessages(username) {
+    try {
+        const messages = await api.getMessages(username);
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = messages.map(msg => `
+            <div class="message ${msg.from === currentUser.username ? 'sent' : 'received'}">
+                ${msg.text}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>
+            </div>
+        `).join('');
+        container.scrollTop = container.scrollHeight;
+    } catch (error) { console.error(error); }
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || !activeChat) return;
+    try {
+        await api.sendMessage(activeChat, text);
+        input.value = '';
+        await loadMessages(activeChat);
+    } catch (error) { alert('Error sending message'); }
+}
+
+async function searchUsers() {
+    const query = document.getElementById('search-users').value;
+    if (query.length < 2) { document.getElementById('search-results').style.display = 'none'; return; }
+    try {
+        const results = await api.searchUsers(query);
+        const container = document.getElementById('search-results');
+        if (results.length === 0) { container.innerHTML = '<div class="search-result-item">No users found</div>'; }
+        else {
+            container.innerHTML = results.map(user => `
+                <div class="search-result-item">
+                    <span>${escapeHtml(user.username)}</span>
+                    <button class="follow-btn" onclick="followUser('${user.username}')">${user.following ? 'Unfollow' : 'Follow'}</button>
+                </div>
+            `).join('');
+        }
+        container.style.display = 'block';
+    } catch (error) { console.error(error); }
+}
+
+async function followUser(username) {
+    try {
+        const user = (await api.searchUsers(username)).find(u => u.username === username);
+        if (user && user.following) await api.unfollowUser(username);
+        else await api.followUser(username);
+        document.getElementById('search-users').value = '';
+        document.getElementById('search-results').style.display = 'none';
+    } catch (error) { alert('Error'); }
+}
+
+function closeChat() {
+    activeChat = null;
+    document.getElementById('conversations-list').style.display = 'block';
+    document.getElementById('chat-messages').style.display = 'none';
+    document.getElementById('chat-input-area').style.display = 'none';
+    document.querySelector('.chat-header h3').textContent = 'Messages';
+    loadConversations();
+}
+
+function toggleChat() {
+    const panel = document.getElementById('chat-panel');
+    panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+    if (panel.style.display === 'flex') loadConversations();
+}
+
+// Tutorial
+function showTutorial() {
+    if (currentUser && currentUser.tutorialCompleted) return;
+    const tutorialDiv = document.createElement('div');
+    tutorialDiv.className = 'tutorial-overlay';
+    tutorialDiv.innerHTML = `
+        <div class="tutorial-content">
+            <h2>🎵 Welcome to TrackStars!</h2>
+            <div class="tutorial-step">
+                <h3>1. Create or Select a Song</h3>
+                <p>Browse the song library or create your own song to get started.</p>
+            </div>
+            <div class="tutorial-step">
+                <h3>2. Add Your Track</h3>
+                <p>Click Record to hear all existing tracks while you record your part. Each user gets ONE track per version!</p>
+            </div>
+            <div class="tutorial-step">
+                <h3>3. Create Forks</h3>
+                <p>Want to take a song in a new direction? Click "Fork This Version" to create your own version.</p>
+            </div>
+            <div class="tutorial-step">
+                <h3>4. Collaborate</h3>
+                <p>Vote on tracks, comment, and message other users to collaborate!</p>
+            </div>
+            <button class="tutorial-button" id="close-tutorial">Got it! Let's make music ⭐</button>
+        </div>
+    `;
+    document.body.appendChild(tutorialDiv);
+    document.getElementById('close-tutorial').onclick = async () => {
+        tutorialDiv.remove();
+        if (currentUser && !currentUser.tutorialCompleted) {
+            await api.completeTutorial();
+            currentUser.tutorialCompleted = true;
+        }
+    };
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function initSocket() {
+    socket = io();
+    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('track-added', async (data) => {
+        if (currentSong && currentSong.id === data.songId) {
+            currentSong = await api.getSong(currentSong.id);
+            displayTracks();
+        }
+    });
+    socket.on('track-deleted', async (data) => {
+        if (currentSong && currentSong.id === data.songId) {
+            currentSong = await api.getSong(currentSong.id);
+            displayTracks();
+        }
+    });
+    socket.on('track-updated', (data) => {
+        if (currentSong) {
+            const track = currentSong.tracks.find(t => t.id === data.trackId);
+            if (track && data.updates) {
+                if (data.updates.muted !== undefined) track.muted = data.updates.muted;
+                if (data.updates.volume !== undefined) track.volume = data.updates.volume;
+                displayTracks();
+            }
+        }
+    });
+    socket.on('track-voted', (data) => {
+        if (currentSong) {
+            const track = currentSong.tracks.find(t => t.id === data.trackId);
+            if (track) track.votes = data.votes;
+            displayTracks();
+        }
+    });
+    socket.on('new-comment', async (comment) => {
+        if (currentSong) {
+            if (!currentSong.comments) currentSong.comments = [];
+            currentSong.comments.push(comment);
+            displayComments();
+        }
+    });
+    socket.on('new-message', (message) => {
+        if (activeChat === message.from) loadMessages(activeChat);
+        else loadConversations();
+    });
+    socket.on('user-recording', (data) => {
+        document.getElementById('recording-status').innerHTML = `🎙️ ${data.username} is recording...`;
+        setTimeout(() => {
+            if (document.getElementById('recording-status').innerHTML.includes('recording'))
+                document.getElementById('recording-status').innerHTML = '';
+        }, 3000);
+    });
+}
+
+function setupEventListeners() {
+    document.querySelectorAll('.auth-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(`${tabName}-form`).classList.add('active');
+        });
+    });
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+        try {
+            await login(username, password);
+            document.getElementById('auth-modal').style.display = 'none';
+            document.getElementById('main-app').style.display = 'flex';
+            document.getElementById('current-user').textContent = currentUser.username;
+            initSocket();
+            loadSongs();
+            showTutorial();
+        } catch (error) {
+            document.getElementById('login-error').textContent = error.message;
+        }
+    });
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('reg-username').value;
+        const email = document.getElementById('reg-email').value;
+        const password = document.getElementById('reg-password').value;
+        const confirm = document.getElementById('reg-confirm').value;
+        try {
+            await register(username, email, password, confirm);
+            document.getElementById('auth-modal').style.display = 'none';
+            document.getElementById('main-app').style.display = 'flex';
+            document.getElementById('current-user').textContent = currentUser.username;
+            initSocket();
+            loadSongs();
+            showTutorial();
+        } catch (error) {
+            document.getElementById('register-error').textContent = error.message;
+        }
+    });
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('open-create-modal').addEventListener('click', () => document.getElementById('create-modal').style.display = 'flex');
+    document.getElementById('confirm-create').addEventListener('click', createSong);
+    document.getElementById('cancel-create').addEventListener('click', () => document.getElementById('create-modal').style.display = 'none');
+    document.getElementById('play-btn').addEventListener('click', () => { if (isPlaying) pausePlayback(); else startPlayback(false); });
+    document.getElementById('stop-btn').addEventListener('click', stopPlayback);
+    document.getElementById('bpm-input').addEventListener('change', (e) => updateBpm(e.target.value));
+    document.getElementById('record-btn').addEventListener('click', startRecordingWithPlayback);
+    document.getElementById('stop-record-btn').addEventListener('click', stopAudioRecording);
+    document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('audio-file').click());
+    document.getElementById('audio-file').addEventListener('change', uploadTrack);
+    document.getElementById('back-btn').addEventListener('click', backToLibrary);
+    document.getElementById('post-comment-btn').addEventListener('click', postComment);
+    document.getElementById('change-thumbnail-btn').addEventListener('click', changeThumbnail);
+    document.getElementById('fork-version-btn').addEventListener('click', forkSong);
+    document.getElementById('confirm-thumbnail').addEventListener('click', applyThumbnail);
+    document.getElementById('cancel-thumbnail').addEventListener('click', () => document.getElementById('thumbnail-modal').style.display = 'none');
+    document.getElementById('chat-icon').addEventListener('click', toggleChat);
+    document.getElementById('close-chat').addEventListener('click', closeChat);
+    document.getElementById('send-btn').addEventListener('click', sendMessage);
+    document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    document.getElementById('search-users').addEventListener('input', searchUsers);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.chat-search')) document.getElementById('search-results').style.display = 'none';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedToken = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (savedToken && savedUser) {
+        token = savedToken;
+        currentUser = JSON.parse(savedUser);
+        document.getElementById('auth-modal').style.display = 'none';
+        document.getElementById('main-app').style.display = 'flex';
+        document.getElementById('current-user').textContent = currentUser.username;
+        initSocket();
+        loadSongs();
+        showTutorial();
+    } else {
+        document.getElementById('auth-modal').style.display = 'flex';
+        document.getElementById('main-app').style.display = 'none';
+    }
+    setupEventListeners();
 });
 
-// Global functions
 window.selectSong = selectSong;
 window.toggleMute = toggleMute;
 window.adjustVolume = adjustVolume;
 window.voteTrack = voteTrack;
 window.deleteTrack = deleteTrack;
-window.viewUser = viewUser;
+window.openChat = openChat;
 window.followUser = followUser;
-window.startChat = startChat;
-window.followFromFeed = followFromFeed;

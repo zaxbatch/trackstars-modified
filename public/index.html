@@ -1,157 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#0a0a12">
-  <title>TrackStars - Collaborative DAW</title>
-  <link rel="stylesheet" href="css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="css/style.css">
+    <title>TrackStars - Collaborative DAW</title>
+
 </head>
 <body>
-  <!-- Auth Modal -->
-  <div id="auth-modal" class="modal">
-    <div class="modal-content">
-      <h2>⭐ TRACKSTARS</h2>
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="login">Login</button>
-        <button class="auth-tab" data-tab="register">Register</button>
-      </div>
-      <form id="login-form" class="auth-form active">
-        <input type="text" id="login-username" placeholder="Username" required>
-        <input type="password" id="login-password" placeholder="Password" required>
-        <button type="submit">Login</button>
-        <div id="login-error" class="error-message"></div>
-      </form>
-      <form id="register-form" class="auth-form">
-        <input type="text" id="reg-username" placeholder="Username" required>
-        <input type="email" id="reg-email" placeholder="Email" required>
-        <input type="password" id="reg-password" placeholder="Password (min 6 chars)" required>
-        <input type="password" id="reg-confirm" placeholder="Confirm Password" required>
-        <button type="submit">Register</button>
-        <div id="register-error" class="error-message"></div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Main App -->
-  <div id="main-app">
-    <div class="header">
-      <div class="logo">⭐ TRACKSTARS</div>
-      <div class="user-info">
-        <img id="header-avatar" class="header-avatar" src="" alt="">
-        <span class="username" id="current-user"></span>
-        <button class="logout-btn" id="logout-btn">Logout</button>
-      </div>
-    </div>
-
-    <!-- Bottom Navigation -->
-    <div class="bottom-nav">
-      <button class="nav-item active" data-view="feed"><span>🔥</span><span>Feed</span></button>
-      <button class="nav-item" data-view="library"><span>🎵</span><span>Library</span></button>
-      <button class="nav-item" data-view="studio"><span>🎛️</span><span>Studio</span></button>
-      <button class="nav-item" data-view="social"><span>💬</span><span>Chat</span></button>
-      <button class="nav-item" data-view="profile"><span>👤</span><span>Profile</span></button>
-    </div>
-
-    <!-- Feed View (Public Feed) -->
-    <div id="feed-view" class="view active">
-      <div class="feed-header">
-        <h3>🔥 Public Feed</h3>
-        <p>Discover new beats and trending creators</p>
-      </div>
-      
-      <!-- Trending Section -->
-      <div class="feed-section">
-        <div class="section-title">📈 Trending This Week</div>
-        <div id="trending-songs" class="horizontal-scroll">
-          <div class="loading">Loading trending...</div>
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content">
+            <h2>⭐ TRACKSTARS</h2>
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="register">Register</button>
+            </div>
+            <form id="login-form" class="auth-form active">
+                <input type="text" id="login-username" placeholder="Username" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">Login</button>
+                <div id="login-error" class="error-message"></div>
+            </form>
+            <form id="register-form" class="auth-form">
+                <input type="text" id="reg-username" placeholder="Username" required>
+                <input type="email" id="reg-email" placeholder="Email" required>
+                <input type="password" id="reg-password" placeholder="Password (min 6 chars)" required>
+                <input type="password" id="reg-confirm" placeholder="Confirm Password" required>
+                <button type="submit">Register</button>
+                <div id="register-error" class="error-message"></div>
+            </form>
         </div>
-      </div>
-      
-      <!-- Recent Beats Section -->
-      <div class="feed-section">
-        <div class="section-title">🆕 Recent Beats</div>
-        <div id="recent-songs" class="song-grid">
-          <div class="loading">Loading recent beats...</div>
-        </div>
-      </div>
-      
-      <!-- New Users Section -->
-      <div class="feed-section">
-        <div class="section-title">✨ New Creators</div>
-        <div id="new-users" class="users-grid">
-          <div class="loading">Loading new creators...</div>
-        </div>
-      </div>
     </div>
 
-    <!-- Library View -->
-    <div id="library-view" class="view">
-      <div class="section-header">
-        <h3>📚 Song Library</h3>
-        <button class="create-btn" id="open-create-modal">+ New Track</button>
-      </div>
-      <input type="text" id="library-search" class="search-input" placeholder="🔍 Search songs or artists...">
-      <div class="song-grid" id="song-list"><div class="loading">Loading tracks...</div></div>
-    </div>
-
-    <!-- Studio View -->
-    <div id="studio-view" class="view">
-      <div class="studio-header">
-        <div><h2 id="current-song-title">Select a track</h2><p id="song-creator"></p></div>
-        <button class="back-btn" id="back-btn">← Back</button>
-      </div>
-      <div class="transport">
-        <button class="play-btn" id="play-btn">▶ Play</button>
-        <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
-        <div class="bpm-control"><span>BPM:</span><input type="number" id="bpm-input" value="120" min="40" max="300"></div>
-      </div>
-      <div class="position-display" id="position-display">00:00:00</div>
-      <div id="track-mixer"><div class="loading">Select a track to start</div></div>
-      <div class="recording-panel">
-        <div class="recording-controls">
-          <button class="record-btn" id="record-btn">🎙️ Start Recording</button>
-          <button class="record-btn" id="stop-record-btn" style="display:none">⏹️ Stop</button>
-          <button class="upload-btn" id="upload-btn">📁 Upload</button>
-          <input type="file" id="audio-file" accept="audio/*" style="display:none">
+    <!-- Main App -->
+    <div id="main-app">
+        <div class="header">
+            <div class="logo" id="logo">⭐ TRACKSTARS</div>
+            <div class="header-right">
+                <div class="chat-icon" id="chat-icon">💬 Messages</div>
+                <div class="user-info">
+                    <span class="username" id="current-user"></span>
+                    <button class="logout-btn" id="logout-btn">Logout</button>
+                </div>
+            </div>
         </div>
-        <div class="recording-settings">
-          <label class="toggle"><input type="checkbox" id="metronome-toggle" checked><span>🎵 Metronome</span></label>
-          <label class="toggle"><input type="checkbox" id="countin-toggle" checked><span>⏱️ Count-In (3 sec)</span></label>
+
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>🎵 Song Library</h3>
+                    <button class="create-song-btn" id="open-create-modal">+ Create New Song</button>
+                </div>
+                <div class="song-list" id="song-list">
+                    <div style="text-align: center; padding: 20px;">Loading songs...</div>
+                </div>
+            </div>
+
+            <!-- DAW Area -->
+            <div class="daw-area" id="daw-area" style="display: none;">
+                <div class="daw-header">
+                    <div class="song-info">
+                        <h2 id="current-song-title"></h2>
+                        <p id="song-creator"></p>
+                    </div>
+                    <div class="daw-actions">
+                        <button class="change-thumbnail-btn" id="change-thumbnail-btn">🖼️ Change Thumbnail</button>
+                        <button class="fork-version-btn" id="fork-version-btn">🔀 Fork This Version</button>
+                        <button class="back-btn" id="back-btn">← Back</button>
+                    </div>
+                </div>
+
+                <div class="transport">
+                    <button class="play-btn" id="play-btn">▶ Play</button>
+                    <button class="stop-btn" id="stop-btn">■ Stop</button>
+                    <div class="bpm-control">
+                        <span>BPM:</span>
+                        <input type="number" id="bpm-input" value="120" min="40" max="300" step="1">
+                    </div>
+                    <div class="position-display" id="position-display">00:00:00</div>
+                </div>
+
+                <div class="track-mixer" id="track-mixer">
+                    <div style="text-align: center; color: #888; padding: 40px;">Select a song to start</div>
+                </div>
+
+                <div class="recording-section">
+                    <div class="recording-controls">
+                        <button class="record-btn" id="record-btn">🎙️ Record New Track</button>
+                        <button class="record-btn" id="stop-record-btn" style="display: none;">⏹️ Stop Recording</button>
+                        <input type="file" id="audio-file" accept="audio/*" style="display: none;">
+                        <button class="upload-btn" id="upload-btn">📁 Upload Audio File</button>
+                        <span id="recording-status" class="recording-status"></span>
+                    </div>
+                </div>
+
+                <div class="comments-panel">
+                    <div class="comments-header">
+                        <h4>💬 Comments</h4>
+                    </div>
+                    <div class="comments-list" id="comments-list"></div>
+                    <div class="comment-input-area">
+                        <input type="text" class="comment-input" id="comment-text" placeholder="Share your thoughts...">
+                        <button class="post-comment" id="post-comment-btn">Post</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Panel -->
+            <div class="chat-panel" id="chat-panel">
+                <div class="chat-header">
+                    <h3>Messages</h3>
+                    <button class="close-chat" id="close-chat">×</button>
+                </div>
+                <div class="chat-search">
+                    <input type="text" id="search-users" placeholder="Search users...">
+                    <div id="search-results" class="search-results" style="display: none;"></div>
+                </div>
+                <div class="conversations-list" id="conversations-list"></div>
+                <div class="chat-messages" id="chat-messages" style="display: none;"></div>
+                <div class="chat-input-area" id="chat-input-area" style="display: none;">
+                    <input type="text" class="chat-input" id="chat-input" placeholder="Type a message...">
+                    <button class="send-btn" id="send-btn">Send</button>
+                </div>
+            </div>
         </div>
-        <div id="countin-display" class="countin" style="display:none"><span id="countin-number">3</span><div class="progress"><div id="countin-bar"></div></div></div>
-        <div id="recording-status" class="status"></div>
-      </div>
     </div>
 
-    <!-- Social/Chat View -->
-    <div id="social-view" class="view">
-      <div class="chat-container">
-        <div class="chat-header"><h3>💬 Messages</h3></div>
-        <div class="chat-users" id="chat-users"><div class="loading">Loading users...</div></div>
-        <div class="chat-conversation" id="chat-conversation" style="display:none">
-          <div class="conv-header"><button id="back-to-users">← Back</button><span id="chat-with"></span></div>
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input"><input type="text" id="chat-input" placeholder="Type a message..."><button id="send-chat">Send</button></div>
+    <!-- Create Song Modal -->
+    <div id="create-modal" class="create-modal">
+        <div class="create-modal-content">
+            <h3>Create New Song</h3>
+            <input type="text" id="new-song-title" placeholder="Song Title" required>
+            <div style="margin: 10px 0;">
+                <label>BPM (Beats Per Minute):</label>
+                <input type="number" id="new-song-bpm" value="120" min="40" max="300" step="1">
+            </div>
+            <select id="new-song-genre">
+                <option value="Electronic">Electronic</option>
+                <option value="Rock">Rock</option>
+                <option value="Hip Hop">Hip Hop</option>
+                <option value="Pop">Pop</option>
+                <option value="Jazz">Jazz</option>
+                <option value="Classical">Classical</option>
+            </select>
+            <div class="modal-buttons">
+                <button class="confirm-btn" id="confirm-create">Create</button>
+                <button class="cancel-btn" id="cancel-create">Cancel</button>
+            </div>
         </div>
-      </div>
     </div>
 
-    <!-- Profile View -->
-    <div id="profile-view" class="view">
-      <div id="profile-content"><div class="loading">Loading profile...</div></div>
+    <!-- Thumbnail Modal -->
+    <div id="thumbnail-modal" class="thumbnail-modal">
+        <div class="thumbnail-modal-content">
+            <h3>Change Thumbnail</h3>
+            <div class="thumbnail-grid" id="thumbnail-grid"></div>
+            <div style="margin: 10px 0;">
+                <label>Or paste image URL:</label>
+                <input type="text" id="thumbnail-url" placeholder="https://...">
+            </div>
+            <div class="modal-buttons">
+                <button class="confirm-btn" id="confirm-thumbnail">Apply</button>
+                <button class="cancel-btn" id="cancel-thumbnail">Cancel</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Modals -->
-    <div id="create-modal" class="modal-overlay"><div class="modal-card"><h3>Create New Track</h3><input type="text" id="new-title" placeholder="Track Title"><input type="number" id="new-bpm" value="120" min="40" max="300"><select id="new-genre"><option>Electronic</option><option>Hip Hop</option><option>Rock</option><option>Pop</option><option>Jazz</option><option>Ambient</option></select><div class="thumb-preview"><img id="thumb-preview"><button id="random-thumb">🎨 Randomize</button></div><div class="modal-buttons"><button id="confirm-create">Create</button><button id="cancel-create">Cancel</button></div></div></div>
-    
-    <div id="profile-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><h3>Edit Profile</h3><button class="close-modal">&times;</button></div><div class="avatar-section"><img id="edit-avatar"><button id="change-avatar">Change Avatar</button><input type="file" id="avatar-file" accept="image/*" style="display:none"></div><textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..."></textarea><div class="stats-row"><div><span id="edit-followers">0</span><label>Followers</label></div><div><span id="edit-following">0</span><label>Following</label></div><div><span id="edit-tracks">0</span><label>Tracks</label></div></div><button id="save-profile">Save Changes</button></div></div>
-    
-    <div id="user-modal" class="modal-overlay"><div class="modal-card"><div class="modal-header"><button class="close-user-modal">&times;</button></div><div id="user-modal-content"></div></div></div>
-  </div>
-
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-  <script src="js/app.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

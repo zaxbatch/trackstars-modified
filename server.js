@@ -20,10 +20,11 @@ app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
 // Create directories
-['data', 'uploads', 'uploads/tracks', 'uploads/avatars'].forEach(dir => {
+['data', 'uploads', 'uploads/tracks', 'uploads/thumbnails'].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
+// Data files
 const dataFiles = {
   users: './data/users.json',
   songs: './data/songs.json',
@@ -32,289 +33,274 @@ const dataFiles = {
 
 if (!fs.existsSync(dataFiles.users)) fs.writeFileSync(dataFiles.users, JSON.stringify({}));
 if (!fs.existsSync(dataFiles.songs)) fs.writeFileSync(dataFiles.songs, JSON.stringify({}));
-if (!fs.existsSync(dataFiles.messages)) fs.writeFileSync(dataFiles.messages, JSON.stringify({}));
+if (!fs.existsSync(dataFiles.messages)) fs.writeFileSync(dataFiles.messages, JSON.stringify([]));
 
 const readData = (file) => {
-  try { return JSON.parse(fs.readFileSync(file)); }
-  catch (e) { return {}; }
+  try {
+    return JSON.parse(fs.readFileSync(file));
+  } catch (e) {
+    return {};
+  }
 };
 
 const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
-function generateRandomThumbnail(title) {
-  const colors = ['667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', '1abc9c', 'e67e22', '9b59b6'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&name=${encodeURIComponent(title.substring(0, 2))}`;
-}
-
-function generateRandomAvatar(username) {
-  const colors = ['667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&name=${encodeURIComponent(username)}`;
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, file.fieldname === 'avatar' ? 'uploads/avatars/' : 'uploads/tracks/');
-  },
+// Multer config
+const trackStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/tracks/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.fieldname === 'avatar') {
-      const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      cb(null, allowed.includes(file.mimetype));
-    } else {
-      const allowed = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/mp3'];
-      cb(null, allowed.includes(file.mimetype));
-    }
-  }
+const thumbnailStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/thumbnails/'),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
 });
 
+const uploadTrack = multer({ storage: trackStorage, limits: { fileSize: 100 * 1024 * 1024 } });
+const uploadThumbnail = multer({ storage: thumbnailStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+
 const authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token' });
-  jwt.verify(token, process.env.JWT_SECRET || 'trackstars-secret', (err, user) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+  jwt.verify(token, process.env.JWT_SECRET || 'trackstars-secret-key', (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
     req.user = user;
     next();
   });
 };
 
-// ============ AUTH ============
+// Random thumbnail generator
+const getRandomThumbnail = () => {
+  const thumbnails = [
+    'https://picsum.photos/id/29/400/400',
+    'https://picsum.photos/id/30/400/400',
+    'https://picsum.photos/id/42/400/400',
+    'https://picsum.photos/id/96/400/400',
+    'https://picsum.photos/id/155/400/400',
+    'https://picsum.photos/id/169/400/400',
+    'https://picsum.photos/id/176/400/400',
+    'https://picsum.photos/id/20/400/400',
+    'https://picsum.photos/id/26/400/400',
+    'https://picsum.photos/id/28/400/400'
+  ];
+  return thumbnails[Math.floor(Math.random() * thumbnails.length)];
+};
+
+// ============= AUTH ROUTES =============
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
+  
   if (!username || !email || !password) return res.status(400).json({ error: 'All fields required' });
   
   const users = readData(dataFiles.users);
-  if (users[username]) return res.status(400).json({ error: 'Username exists' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password too short' });
+  if (users[username]) return res.status(400).json({ error: 'Username already exists' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   
   users[username] = {
-    username, email,
+    username,
+    email,
     password: await bcrypt.hash(password, 10),
-    followers: [], following: [], contributedTo: [], likedSongs: [], savedSongs: [],
-    createdAt: Date.now(), bio: '',
-    avatar: generateRandomAvatar(username)
+    followers: [],
+    following: [],
+    contributedTo: [],
+    createdAt: Date.now(),
+    tutorialCompleted: false,
+    avatar: getRandomThumbnail()
   };
-  writeData(dataFiles.users, users);
   
-  const token = jwt.sign({ username }, process.env.JWT_SECRET || 'trackstars-secret');
-  res.json({ token, user: { username, email, followers: [], following: [], contributedTo: [], likedSongs: [], savedSongs: [], bio: '', avatar: users[username].avatar } });
+  writeData(dataFiles.users, users);
+  const token = jwt.sign({ username }, process.env.JWT_SECRET || 'trackstars-secret-key');
+  res.json({ token, user: { username, email, followers: [], following: [], tutorialCompleted: false, avatar: getRandomThumbnail() } });
 });
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const users = readData(dataFiles.users);
   const user = users[username];
+  
   if (!user) return res.status(401).json({ error: 'User not found' });
-  if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ error: 'Wrong password' });
+  if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ error: 'Invalid password' });
   
-  const token = jwt.sign({ username }, process.env.JWT_SECRET || 'trackstars-secret');
-  res.json({ token, user: { username, email: user.email, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], likedSongs: user.likedSongs || [], savedSongs: user.savedSongs || [], bio: user.bio || '', avatar: user.avatar } });
+  const token = jwt.sign({ username }, process.env.JWT_SECRET || 'trackstars-secret-key');
+  res.json({ token, user: { 
+    username, 
+    email: user.email, 
+    followers: user.followers || [],
+    following: user.following || [],
+    tutorialCompleted: user.tutorialCompleted || false,
+    avatar: user.avatar || getRandomThumbnail()
+  } });
 });
 
-app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+app.post('/api/users/tutorial', authenticateToken, (req, res) => {
   const users = readData(dataFiles.users);
-  users[req.user.username].avatar = '/uploads/avatars/' + req.file.filename;
-  writeData(dataFiles.users, users);
-  res.json({ avatar: users[req.user.username].avatar });
-});
-
-app.put('/api/users/bio', authenticateToken, (req, res) => {
-  const users = readData(dataFiles.users);
-  users[req.user.username].bio = req.body.bio;
-  writeData(dataFiles.users, users);
-  res.json({ bio: req.body.bio });
-});
-
-// ============ USERS ============
-app.get('/api/users', authenticateToken, (req, res) => {
-  const users = readData(dataFiles.users);
-  res.json(Object.keys(users).map(u => ({ username: u, avatar: users[u].avatar, followersCount: users[u].followers?.length || 0 })));
-});
-
-app.get('/api/users/:username', authenticateToken, (req, res) => {
-  const user = readData(dataFiles.users)[req.params.username];
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json({ username: user.username, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], bio: user.bio || '', avatar: user.avatar, createdAt: user.createdAt });
-});
-
-app.post('/api/users/:username/follow', authenticateToken, (req, res) => {
-  const users = readData(dataFiles.users);
-  const target = users[req.params.username];
-  const current = users[req.user.username];
-  if (!target) return res.status(404).json({ error: 'Not found' });
-  if (req.params.username === req.user.username) return res.status(400).json({ error: 'Cannot follow self' });
-  
-  let following = false;
-  if (target.followers?.includes(req.user.username)) {
-    target.followers = target.followers.filter(f => f !== req.user.username);
-    current.following = current.following.filter(f => f !== req.params.username);
+  if (users[req.user.username]) {
+    users[req.user.username].tutorialCompleted = true;
+    writeData(dataFiles.users, users);
+    res.json({ success: true });
   } else {
-    target.followers = [...(target.followers || []), req.user.username];
-    current.following = [...(current.following || []), req.params.username];
-    following = true;
+    res.status(404).json({ error: 'User not found' });
   }
-  writeData(dataFiles.users, users);
-  res.json({ following, followersCount: target.followers.length });
 });
 
-// ============ MESSAGES ============
-app.get('/api/messages/:userId', authenticateToken, (req, res) => {
-  const messages = readData(dataFiles.messages);
-  const convId = [req.user.username, req.params.userId].sort().join('-');
-  res.json(messages[convId] || []);
-});
-
-app.post('/api/messages', authenticateToken, (req, res) => {
-  const { to, text } = req.body;
-  const messages = readData(dataFiles.messages);
-  const convId = [req.user.username, to].sort().join('-');
-  if (!messages[convId]) messages[convId] = [];
-  const msg = { id: uuidv4(), from: req.user.username, to, text, timestamp: Date.now() };
-  messages[convId].push(msg);
-  writeData(dataFiles.messages, messages);
-  io.to(to).emit('new-message', msg);
-  res.json(msg);
-});
-
-// ============ FEED ROUTES ============
-app.get('/api/feed/public', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const users = readData(dataFiles.users);
-  const currentUsername = req.user.username;
-  
-  // Get recent songs (last 30 days)
-  const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  const recentSongs = Object.values(songs)
-    .filter(song => song.createdAt > oneMonthAgo)
-    .map(song => ({
-      id: song.id,
-      title: song.title,
-      creator: song.creator,
-      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
-      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
-      bpm: song.bpm || 120,
-      trackCount: song.tracks?.length || 0,
-      likes: song.likes || 0,
-      createdAt: song.createdAt,
-      genre: song.genre || 'Electronic',
-      isNew: (Date.now() - song.createdAt) < 7 * 24 * 60 * 60 * 1000,
-      type: 'song'
-    }))
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 20);
-  
-  // Get recent users (last 30 days)
-  const recentUsers = Object.values(users)
-    .filter(user => user.createdAt > oneMonthAgo && user.username !== currentUsername)
-    .map(user => ({
-      username: user.username,
-      avatar: user.avatar,
-      bio: user.bio || 'New on TrackStars!',
-      followersCount: user.followers?.length || 0,
-      tracksCount: user.contributedTo?.length || 0,
-      createdAt: user.createdAt,
-      isNew: (Date.now() - user.createdAt) < 7 * 24 * 60 * 60 * 1000,
-      isFollowing: (user.followers || []).includes(currentUsername),
-      type: 'user'
-    }))
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 10);
-  
-  // Get trending songs (most likes in last 7 days)
-  const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  const trendingSongs = Object.values(songs)
-    .filter(song => song.createdAt > oneWeekAgo)
-    .map(song => ({
-      id: song.id,
-      title: song.title,
-      creator: song.creator,
-      creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
-      thumbnail: song.thumbnail || generateRandomThumbnail(song.title),
-      trackCount: song.tracks?.length || 0,
-      likes: song.likes || 0,
-      createdAt: song.createdAt,
-      genre: song.genre || 'Electronic',
-      type: 'song'
-    }))
-    .sort((a, b) => b.likes - a.likes)
-    .slice(0, 10);
-  
-  res.json({ recentSongs, recentUsers, trendingSongs });
-});
-
-// ============ SONGS ============
+// ============= SONG VERSIONING ROUTES =============
 app.get('/api/songs', (req, res) => {
   const songs = readData(dataFiles.songs);
-  const list = Object.values(songs).map(s => ({
-    id: s.id, title: s.title, creator: s.creator,
-    thumbnail: s.thumbnail || generateRandomThumbnail(s.title),
-    bpm: s.bpm || 120, trackCount: s.tracks?.length || 0,
-    likes: s.likes || 0, createdAt: s.createdAt, genre: s.genre || 'Electronic'
-  })).sort((a, b) => b.createdAt - a.createdAt);
-  res.json(list);
+  const songList = Object.values(songs).map(song => ({
+    id: song.id,
+    title: song.title,
+    creator: song.creator,
+    bpm: song.bpm || 120,
+    version: song.version || 1,
+    parentVersion: song.parentVersion || null,
+    trackCount: (song.tracks || []).length,
+    upvotes: song.upvotes || 0,
+    createdAt: song.createdAt,
+    thumbnail: song.thumbnail || getRandomThumbnail(),
+    genre: song.genre || 'Electronic'
+  }));
+  
+  songList.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(songList);
 });
 
 app.get('/api/songs/:id', (req, res) => {
-  const song = readData(dataFiles.songs)[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Not found' });
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  
+  if (!song.tracks) song.tracks = [];
+  if (!song.comments) song.comments = [];
+  if (!song.voters) song.voters = {};
+  if (song.upvotes === undefined) song.upvotes = 0;
+  if (!song.versions) song.versions = [];
+  if (!song.thumbnail) song.thumbnail = getRandomThumbnail();
+  
   res.json(song);
 });
 
+app.get('/api/songs/:id/versions', (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  
+  const versions = (song.versions || []).map(versionId => songs[versionId]).filter(v => v);
+  res.json(versions);
+});
+
 app.post('/api/songs', authenticateToken, (req, res) => {
-  const { title, bpm = 120, genre = 'Electronic' } = req.body;
+  const { title, bpm = 120, genre = 'Electronic', parentVersion = null, thumbnail = null } = req.body;
+  
   if (!title) return res.status(400).json({ error: 'Title required' });
   
   const songs = readData(dataFiles.songs);
   const songId = uuidv4();
+  
+  // Determine version number
+  let version = 1;
+  if (parentVersion) {
+    const parentSong = songs[parentVersion];
+    if (parentSong) {
+      version = (parentSong.version || 1) + 1;
+    }
+  }
+  
   const newSong = {
-    id: songId, title, creator: req.user.username, bpm: parseInt(bpm), genre,
-    thumbnail: generateRandomThumbnail(title), createdAt: Date.now(),
-    tracks: [], upvotes: 0, likes: 0, voters: [], comments: [],
-    isPlaying: false, currentPosition: 0, duration: 0, isFeatured: false
+    id: songId,
+    title,
+    creator: req.user.username,
+    bpm: parseInt(bpm),
+    genre: genre,
+    version: version,
+    parentVersion: parentVersion,
+    createdAt: Date.now(),
+    tracks: [],
+    upvotes: 0,
+    voters: {},
+    comments: [],
+    thumbnail: thumbnail || getRandomThumbnail(),
+    isPlaying: false,
+    currentPosition: 0,
+    duration: 0,
+    bpmLockedBy: parentVersion ? songs[parentVersion]?.creator : req.user.username
   };
+  
   songs[songId] = newSong;
+  
+  // Add to parent's versions list
+  if (parentVersion && songs[parentVersion]) {
+    if (!songs[parentVersion].versions) songs[parentVersion].versions = [];
+    songs[parentVersion].versions.push(songId);
+  }
+  
   writeData(dataFiles.songs, songs);
   
   const users = readData(dataFiles.users);
   if (users[req.user.username]) {
-    users[req.user.username].contributedTo = [...(users[req.user.username].contributedTo || []), songId];
+    if (!users[req.user.username].contributedTo) users[req.user.username].contributedTo = [];
+    users[req.user.username].contributedTo.push(songId);
     writeData(dataFiles.users, users);
   }
+  
   io.emit('song-created', newSong);
   res.json(newSong);
 });
 
-app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req, res) => {
+app.post('/api/songs/:id/thumbnail', authenticateToken, uploadThumbnail.single('thumbnail'), (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Not found' });
-  if (song.tracks?.some(t => t.username === req.user.username)) {
-    return res.status(400).json({ error: 'Already have a track' });
+  
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only song creator can change thumbnail' });
+  
+  if (req.file) {
+    song.thumbnail = `/uploads/thumbnails/${req.file.filename}`;
+  } else if (req.body.thumbnailUrl) {
+    song.thumbnail = req.body.thumbnailUrl;
   }
-  if (!req.file) return res.status(400).json({ error: 'No audio' });
+  
+  writeData(dataFiles.songs, songs);
+  res.json({ thumbnail: song.thumbnail });
+});
+
+// Add track to a specific version
+app.post('/api/songs/:id/track', authenticateToken, uploadTrack.single('audio'), (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (!song.tracks) song.tracks = [];
+  
+  const userAlreadyContributed = song.tracks.some(track => track.username === req.user.username);
+  if (userAlreadyContributed) return res.status(400).json({ error: 'You already added a track to this version!' });
+  if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
   
   const newTrack = {
-    id: uuidv4(), username: req.user.username,
-    audioUrl: '/uploads/tracks/' + req.file.filename,
-    uploadedAt: Date.now(), volume: 0.8, muted: false, votes: 0, voters: {}
+    id: uuidv4(),
+    username: req.user.username,
+    audioUrl: `/uploads/tracks/${req.file.filename}`,
+    uploadedAt: Date.now(),
+    volume: 0.8,
+    muted: false,
+    votes: 0,
+    voters: {}
   };
-  song.tracks = [...(song.tracks || []), newTrack];
+  
+  song.tracks.push(newTrack);
   writeData(dataFiles.songs, songs);
   
   const users = readData(dataFiles.users);
-  if (!users[req.user.username].contributedTo?.includes(song.id)) {
-    users[req.user.username].contributedTo = [...(users[req.user.username].contributedTo || []), song.id];
-    writeData(dataFiles.users, users);
+  if (users[req.user.username]) {
+    if (!users[req.user.username].contributedTo) users[req.user.username].contributedTo = [];
+    if (!users[req.user.username].contributedTo.includes(song.id)) {
+      users[req.user.username].contributedTo.push(song.id);
+      writeData(dataFiles.users, users);
+    }
   }
+  
   io.to(song.id).emit('track-added', { songId: song.id, track: newTrack });
   res.json(newTrack);
 });
@@ -322,101 +308,281 @@ app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req
 app.delete('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.songId];
-  if (!song) return res.status(404).json({ error: 'Not found' });
   
-  const track = song.tracks?.find(t => t.id === req.params.trackId);
-  if (!track || track.username !== req.user.username) {
-    return res.status(403).json({ error: 'Not your track' });
-  }
-  song.tracks = song.tracks.filter(t => t.id !== req.params.trackId);
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (!song.tracks) song.tracks = [];
+  
+  const trackIndex = song.tracks.findIndex(t => t.id === req.params.trackId);
+  if (trackIndex === -1) return res.status(404).json({ error: 'Track not found' });
+  
+  const track = song.tracks[trackIndex];
+  if (track.username !== req.user.username) return res.status(403).json({ error: 'You can only delete your own tracks' });
+  
+  song.tracks.splice(trackIndex, 1);
   writeData(dataFiles.songs, songs);
+  
   io.to(song.id).emit('track-deleted', { songId: song.id, trackId: req.params.trackId, username: req.user.username });
   res.json({ success: true });
+});
+
+app.put('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.songId];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (!song.tracks) song.tracks = [];
+  
+  const trackIndex = song.tracks.findIndex(t => t.id === req.params.trackId);
+  if (trackIndex === -1) return res.status(404).json({ error: 'Track not found' });
+  
+  const { volume, muted } = req.body;
+  if (volume !== undefined) song.tracks[trackIndex].volume = volume;
+  if (muted !== undefined) song.tracks[trackIndex].muted = muted;
+  
+  writeData(dataFiles.songs, songs);
+  io.to(song.id).emit('track-updated', { songId: song.id, trackId: req.params.trackId, updates: { volume, muted } });
+  res.json(song.tracks[trackIndex]);
 });
 
 app.post('/api/songs/:songId/track/:trackId/vote', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.songId];
-  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (!song.tracks) song.tracks = [];
   
-  const track = song.tracks?.find(t => t.id === req.params.trackId);
-  if (!track) return res.status(404).json({ error: 'Track not found' });
+  const trackIndex = song.tracks.findIndex(t => t.id === req.params.trackId);
+  if (trackIndex === -1) return res.status(404).json({ error: 'Track not found' });
   
+  const { vote } = req.body;
+  const voter = req.user.username;
+  const track = song.tracks[trackIndex];
   if (!track.voters) track.voters = {};
-  const wasUp = track.voters[req.user.username] === 'up';
-  const isUp = req.body.vote === 'up';
   
-  if (wasUp && isUp) { track.votes--; delete track.voters[req.user.username]; }
-  else if (!wasUp && isUp) { track.votes++; track.voters[req.user.username] = 'up'; }
-  else if (wasUp && !isUp) { track.votes -= 2; track.voters[req.user.username] = 'down'; }
-  else if (!wasUp && !isUp) { track.votes--; delete track.voters[req.user.username]; }
+  if (track.voters[voter]) {
+    if (track.voters[voter] === 'up') track.votes--;
+    else track.votes++;
+  }
+  
+  if (vote === 'up') {
+    track.votes++;
+    track.voters[voter] = 'up';
+  } else if (vote === 'down') {
+    track.votes--;
+    track.voters[voter] = 'down';
+  }
   
   writeData(dataFiles.songs, songs);
   io.to(song.id).emit('track-voted', { songId: song.id, trackId: req.params.trackId, votes: track.votes });
   res.json({ votes: track.votes });
 });
 
-app.put('/api/songs/:songId/track/:trackId', authenticateToken, (req, res) => {
+app.post('/api/songs/:id/comment', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
-  const song = songs[req.params.songId];
-  if (!song) return res.status(404).json({ error: 'Not found' });
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (!song.comments) song.comments = [];
   
-  const track = song.tracks?.find(t => t.id === req.params.trackId);
-  if (!track) return res.status(404).json({ error: 'Track not found' });
+  const comment = {
+    id: uuidv4(),
+    username: req.user.username,
+    text: req.body.text,
+    createdAt: Date.now()
+  };
   
-  if (req.body.volume !== undefined) track.volume = req.body.volume;
-  if (req.body.muted !== undefined) track.muted = req.body.muted;
+  song.comments.push(comment);
   writeData(dataFiles.songs, songs);
-  io.to(song.id).emit('track-updated', { trackId: req.params.trackId, updates: { volume: track.volume, muted: track.muted } });
-  res.json(track);
+  io.to(song.id).emit('new-comment', comment);
+  res.json(comment);
 });
 
-// ============ SOCKET.IO ============
+// Update BPM (only version owner)
+app.put('/api/songs/:id/bpm', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the version owner can change BPM' });
+  
+  const { bpm } = req.body;
+  song.bpm = Math.min(300, Math.max(40, parseInt(bpm)));
+  writeData(dataFiles.songs, songs);
+  
+  io.to(song.id).emit('bpm-updated', { songId: song.id, bpm: song.bpm });
+  res.json({ bpm: song.bpm });
+});
+
+// ============= MESSAGING ROUTES =============
+app.get('/api/messages/:username', authenticateToken, (req, res) => {
+  const messages = readData(dataFiles.messages);
+  const username = req.params.username;
+  const currentUser = req.user.username;
+  
+  const userMessages = messages.filter(m => 
+    (m.from === currentUser && m.to === username) || 
+    (m.from === username && m.to === currentUser)
+  );
+  
+  res.json(userMessages);
+});
+
+app.get('/api/conversations', authenticateToken, (req, res) => {
+  const messages = readData(dataFiles.messages);
+  const currentUser = req.user.username;
+  
+  const conversations = new Map();
+  messages.forEach(msg => {
+    if (msg.from === currentUser || msg.to === currentUser) {
+      const otherUser = msg.from === currentUser ? msg.to : msg.from;
+      if (!conversations.has(otherUser) || conversations.get(otherUser).timestamp < msg.timestamp) {
+        conversations.set(otherUser, {
+          username: otherUser,
+          lastMessage: msg.text,
+          timestamp: msg.timestamp,
+          unread: !msg.read && msg.to === currentUser
+        });
+      }
+    }
+  });
+  
+  const result = Array.from(conversations.values()).sort((a, b) => b.timestamp - a.timestamp);
+  res.json(result);
+});
+
+app.post('/api/messages', authenticateToken, (req, res) => {
+  const { to, text } = req.body;
+  const messages = readData(dataFiles.messages);
+  
+  const message = {
+    id: uuidv4(),
+    from: req.user.username,
+    to: to,
+    text: text,
+    timestamp: Date.now(),
+    read: false
+  };
+  
+  messages.push(message);
+  writeData(dataFiles.messages, messages);
+  
+  io.to(to).emit('new-message', message);
+  res.json(message);
+});
+
+app.post('/api/messages/read', authenticateToken, (req, res) => {
+  const { from } = req.body;
+  const messages = readData(dataFiles.messages);
+  const currentUser = req.user.username;
+  
+  messages.forEach(msg => {
+    if (msg.from === from && msg.to === currentUser && !msg.read) {
+      msg.read = true;
+    }
+  });
+  
+  writeData(dataFiles.messages, messages);
+  res.json({ success: true });
+});
+
+// ============= SOCIAL ROUTES =============
+app.post('/api/users/:username/follow', authenticateToken, (req, res) => {
+  const { username } = req.params;
+  const follower = req.user.username;
+  if (username === follower) return res.status(400).json({ error: 'Cannot follow yourself' });
+  
+  const users = readData(dataFiles.users);
+  if (!users[username]) return res.status(404).json({ error: 'User not found' });
+  
+  if (!users[username].followers.includes(follower)) {
+    users[username].followers.push(follower);
+    users[follower].following.push(username);
+    writeData(dataFiles.users, users);
+  }
+  
+  res.json({ success: true });
+});
+
+app.post('/api/users/:username/unfollow', authenticateToken, (req, res) => {
+  const { username } = req.params;
+  const follower = req.user.username;
+  
+  const users = readData(dataFiles.users);
+  users[username].followers = users[username].followers.filter(f => f !== follower);
+  users[follower].following = users[follower].following.filter(f => f !== username);
+  writeData(dataFiles.users, users);
+  
+  res.json({ success: true });
+});
+
+app.get('/api/users/search', authenticateToken, (req, res) => {
+  const { q } = req.query;
+  const users = readData(dataFiles.users);
+  const currentUser = req.user.username;
+  
+  const results = Object.keys(users)
+    .filter(u => u !== currentUser && u.toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 20)
+    .map(u => ({
+      username: u,
+      avatar: users[u].avatar || getRandomThumbnail(),
+      following: users[currentUser].following.includes(u)
+    }));
+  
+  res.json(results);
+});
+
+app.get('/api/users/:username', (req, res) => {
+  const users = readData(dataFiles.users);
+  const user = users[req.params.username];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  
+  res.json({
+    username: user.username,
+    followers: user.followers.length,
+    following: user.following.length,
+    songsContributed: user.songsContributed,
+    createdAt: user.createdAt,
+    avatar: user.avatar || getRandomThumbnail()
+  });
+});
+
+// ============= SOCKET.IO =============
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   
   socket.on('join-song', (songId) => {
     socket.join(songId);
     socket.songRoom = songId;
-    const songs = readData(dataFiles.songs);
-    const song = songs[songId];
-    if (song) {
-      socket.emit('transport-state', { isPlaying: song.isPlaying || false, position: song.currentPosition || 0, bpm: song.bpm || 120 });
-    }
+    console.log(`Socket ${socket.id} joined song ${songId}`);
+  });
+  
+  socket.on('join-user', (username) => {
+    socket.join(`user-${username}`);
+    socket.userRoom = username;
   });
   
   socket.on('leave-song', () => {
-    if (socket.songRoom) socket.leave(socket.songRoom);
-    delete socket.songRoom;
-  });
-  
-  socket.on('transport-control', (data) => {
-    const songs = readData(dataFiles.songs);
-    const song = songs[data.songId];
-    if (song) {
-      if (data.action === 'play') { song.isPlaying = true; song.currentPosition = data.position || 0; }
-      else if (data.action === 'pause') { song.isPlaying = false; song.currentPosition = data.position || 0; }
-      else if (data.action === 'stop') { song.isPlaying = false; song.currentPosition = 0; }
-      else if (data.action === 'setBpm') { song.bpm = data.bpm || 120; }
-      writeData(dataFiles.songs, songs);
-      socket.to(data.songId).emit('transport-state', { isPlaying: song.isPlaying, position: song.currentPosition, bpm: song.bpm });
+    if (socket.songRoom) {
+      socket.leave(socket.songRoom);
+      delete socket.songRoom;
     }
   });
   
+  socket.on('transport-control', (data) => {
+    const { songId, action, position } = data;
+    socket.to(songId).emit('transport-state', { action, position });
+  });
+  
   socket.on('track-update', (data) => {
-    socket.to(data.songId).emit('track-updated', { trackId: data.trackId, updates: data.updates });
+    const { songId, trackId, updates } = data;
+    socket.to(songId).emit('track-updated', { trackId, updates });
   });
   
   socket.on('recording-started', (data) => {
-    socket.to(data.songId).emit('user-recording', { username: data.username });
+    const { songId, username } = data;
+    socket.to(songId).emit('user-recording', { username });
   });
   
   socket.on('recording-stopped', (data) => {
-    socket.to(data.songId).emit('recording-complete', { username: data.username });
-  });
-  
-  socket.on('join-chat', (userId) => {
-    socket.join(`chat-${userId}`);
+    const { songId, username } = data;
+    socket.to(songId).emit('recording-complete', { username });
   });
   
   socket.on('disconnect', () => {
@@ -430,5 +596,5 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`⭐ TrackStars running on http://localhost:${PORT}`);
+  console.log(`🎵 TrackStars DAW running on http://localhost:${PORT}`);
 });
