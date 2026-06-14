@@ -399,10 +399,27 @@
             currentPos = 0;
             updateDisplay(0);
             
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById('studio-view').classList.add('active');
-        } catch(e) { showToast('Error loading song'); console.error(e); }
+            // HIDE ALL REGULAR VIEWS
+            document.querySelectorAll('.view').forEach(v => {
+                v.classList.remove('active');
+            });
+            
+            // SHOW STUDIO VIEW
+            const studioView = document.getElementById('studio-view');
+            if (studioView) {
+                studioView.classList.add('active');
+                studioView.style.display = 'block';
+            }
+            
+            // Remove active from nav items
+            document.querySelectorAll('.nav-item').forEach(n => {
+                n.classList.remove('active');
+            });
+            
+        } catch(e) { 
+            showToast('Error loading song'); 
+            console.error(e);
+        }
     };
 
     function displayTracks() {
@@ -549,8 +566,7 @@
             document.getElementById('create-modal').style.display = 'none';
             document.getElementById('new-title').value = '';
             loadSongs(); loadFeed(); 
-            await selectSong(song.id);
-            // Prompt to add track
+            await window.selectSong(song.id);
             setTimeout(() => {
                 const addTrack = confirm('Would you like to add a track to your new song?');
                 if (addTrack) {
@@ -581,11 +597,28 @@
         if (audioCtx) audioCtx.close();
         if (socket && currentSong) socket.emit('leave-song', currentSong.id);
         currentSong = null;
+        
+        // HIDE STUDIO VIEW
+        const studioView = document.getElementById('studio-view');
+        if (studioView) {
+            studioView.classList.remove('active');
+            studioView.style.display = 'none';
+        }
+        
+        // HIDE ALL REGULAR VIEWS
+        document.querySelectorAll('.view').forEach(v => {
+            v.classList.remove('active');
+        });
+        
+        // SHOW LIBRARY VIEW
+        const libraryView = document.getElementById('library-view');
+        if (libraryView) libraryView.classList.add('active');
+        
+        // UPDATE BOTTOM NAV
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         const libraryNav = document.querySelector('.nav-item[data-view="library"]');
         if (libraryNav) libraryNav.classList.add('active');
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.getElementById('library-view').classList.add('active');
+        
         loadSongs();
     }
 
@@ -966,6 +999,11 @@
     function initNav() {
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.onclick = () => {
+                // Don't switch if studio is active? Or allow switching? Let's allow switching but close studio
+                if (currentSong) {
+                    backToLibrary();
+                }
+                
                 const view = btn.dataset.view;
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 btn.classList.add('active');
