@@ -12,6 +12,7 @@
     let metronomeInterval = null;
     let metronomeEnabled = false;
     let metronomeCtx = null;
+    let metronomeGain = null;
 
     function getToken() { return localStorage.getItem('token'); }
 
@@ -117,42 +118,66 @@
         window.location.reload();
     }
 
-    // ============ METRONOME FUNCTIONS ============
+    // ============ METRONOME FUNCTIONS (Chrome-compatible) ============
+    function initMetronomeContext() {
+        if (!metronomeCtx) {
+            metronomeCtx = new (window.AudioContext || window.webkitAudioContext)();
+            metronomeGain = metronomeCtx.createGain();
+            metronomeGain.gain.value = 0.15;
+            metronomeGain.connect(metronomeCtx.destination);
+        }
+        // Resume if suspended (Chrome requires user interaction)
+        if (metronomeCtx.state === 'suspended') {
+            metronomeCtx.resume();
+        }
+        return metronomeCtx;
+    }
+
     function playMetronomeClick() {
         if (!metronomeEnabled) return;
         
-        if (!metronomeCtx) {
-            metronomeCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        const osc = metronomeCtx.createOscillator();
-        const gain = metronomeCtx.createGain();
-        
-        osc.connect(gain);
-        gain.connect(metronomeCtx.destination);
-        
-        osc.frequency.value = 1000;
-        gain.gain.value = 0.2;
-        
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.00001, metronomeCtx.currentTime + 0.1);
-        osc.stop(metronomeCtx.currentTime + 0.1);
-        
-        // Visual beat indicator
-        const beatIndicator = document.createElement('span');
-        beatIndicator.className = 'metronome-beat';
-        const metronomeLabel = document.querySelector('.metronome-label');
-        if (metronomeLabel) {
-            metronomeLabel.appendChild(beatIndicator);
-            setTimeout(function() {
-                if (beatIndicator && beatIndicator.remove) beatIndicator.remove();
-            }, 300);
+        try {
+            const ctx = initMetronomeContext();
+            
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(metronomeGain);
+            
+            osc.frequency.value = 880;
+            gain.gain.value = 0.3;
+            
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.1);
+            osc.stop(ctx.currentTime + 0.1);
+            
+            // Visual beat indicator
+            const beatIndicator = document.createElement('span');
+            beatIndicator.className = 'metronome-beat';
+            const metronomeLabel = document.querySelector('.metronome-label');
+            if (metronomeLabel) {
+                metronomeLabel.appendChild(beatIndicator);
+                setTimeout(function() {
+                    if (beatIndicator && beatIndicator.remove) beatIndicator.remove();
+                }, 300);
+            }
+        } catch(e) {
+            console.log('Metronome click error:', e);
         }
     }
     
     function startMetronome() {
-        if (metronomeInterval) clearInterval(metronomeInterval);
+        if (metronomeInterval) {
+            clearInterval(metronomeInterval);
+            metronomeInterval = null;
+        }
         if (!metronomeEnabled) return;
+        
+        const ctx = initMetronomeContext();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
         
         const beatInterval = (60 / bpm) * 1000;
         metronomeInterval = setInterval(function() {
@@ -171,11 +196,17 @@
     
     function toggleMetronome(enabled) {
         metronomeEnabled = enabled;
-        if (enabled && (isPlaying || isRecording)) {
-            startMetronome();
-        } else if (!enabled) {
+        
+        if (enabled) {
+            initMetronomeContext();
+            if (isPlaying || isRecording) {
+                startMetronome();
+            }
+        } else {
             stopMetronome();
         }
+        
+        localStorage.setItem('metronomeEnabled', metronomeEnabled);
     }
 
     // Audio Functions
@@ -234,6 +265,14 @@
         }
         await loadTracks();
         if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
+        if (metronomeEnabled) {
+            initMetronomeContext();
+            if (metronomeCtx && metronomeCtx.state === 'suspended') {
+                await metronomeCtx.resume();
+            }
+        }
+        
         isPlaying = true;
         startTime = audioCtx.currentTime - currentPos;
         for (let i = 0; i < currentSong.tracks.length; i++) {
@@ -242,7 +281,6 @@
         }
         if (recordMode) await startRecording();
         
-        // Start metronome if enabled
         if (metronomeEnabled) {
             startMetronome();
         }
@@ -264,7 +302,6 @@
         isPlaying = false;
         if (isRecording) stopRecording();
         
-        // Stop metronome
         stopMetronome();
         
         for (let i = 0; i < sources.length; i++) { 
@@ -298,6 +335,14 @@
         try {
             if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            if (metronomeEnabled) {
+                initMetronomeContext();
+                if (metronomeCtx && metronomeCtx.state === 'suspended') {
+                    await metronomeCtx.resume();
+                }
+            }
+            
             const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/wav'];
             let mime = '';
             for (let i = 0; i < mimeTypes.length; i++) {
@@ -352,7 +397,6 @@
             const statusDiv = document.getElementById('recording-status');
             if (statusDiv) statusDiv.innerHTML = '🔴 RECORDING';
             
-            // Start metronome if enabled
             if (metronomeEnabled) {
                 startMetronome();
             }
@@ -370,7 +414,6 @@
         if (recBtn) recBtn.style.display = 'inline-block';
         if (stopRecBtn) stopRecBtn.style.display = 'none';
         
-        // Stop metronome
         stopMetronome();
     }
 
@@ -525,11 +568,13 @@
             }
             bpm = currentSong.bpm;
             
-            // Reset metronome with new BPM if enabled
-            if (metronomeEnabled) {
-                stopMetronome();
-                if (isPlaying || isRecording) {
-                    startMetronome();
+            // Restore metronome preference
+            const savedMetronome = localStorage.getItem('metronomeEnabled');
+            if (savedMetronome !== null) {
+                metronomeEnabled = savedMetronome === 'true';
+                const metronomeToggle = document.getElementById('metronome-toggle');
+                if (metronomeToggle) {
+                    metronomeToggle.checked = metronomeEnabled;
                 }
             }
             
@@ -552,7 +597,6 @@
             if (recBtn) recBtn.disabled = hasTrack;
             if (upBtn) upBtn.disabled = hasTrack;
             
-            // BLINK EFFECT - Flash record/upload buttons if user doesn't have a track
             if (!hasTrack && recBtn && upBtn) {
                 recBtn.classList.remove('blink-record');
                 upBtn.classList.remove('blink-upload');
@@ -581,12 +625,6 @@
             const navItems = document.querySelectorAll('.nav-item');
             for (let i = 0; i < navItems.length; i++) {
                 navItems[i].classList.remove('active');
-            }
-            
-            // Reset metronome toggle UI
-            const metronomeToggle = document.getElementById('metronome-toggle');
-            if (metronomeToggle) {
-                metronomeToggle.checked = metronomeEnabled;
             }
         } catch(e) { 
             console.error('Error loading song:', e);
@@ -809,7 +847,6 @@
             bpm = clampedBpm;
             showToast('BPM updated');
             
-            // Restart metronome with new BPM if enabled
             if (metronomeEnabled && (isPlaying || isRecording)) {
                 stopMetronome();
                 startMetronome();
@@ -1683,6 +1720,16 @@
         setTimeout(function() { toast.remove(); }, duration); 
     }
 
+    // Global audio context enabler for Chrome
+    function enableAudioOnFirstInteraction() {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        if (metronomeCtx && metronomeCtx.state === 'suspended') {
+            metronomeCtx.resume();
+        }
+    }
+
     // Export Listeners
     function setupExportListeners() {
         const exportBtn = document.getElementById('export-mix-btn');
@@ -1728,6 +1775,10 @@
 
     // Event Listeners
     function setupEventListeners() {
+        // Global click handler to enable audio contexts (Chrome requires user interaction)
+        document.addEventListener('click', enableAudioOnFirstInteraction);
+        document.addEventListener('keydown', enableAudioOnFirstInteraction);
+        
         // Auth tabs
         const authTabs = document.querySelectorAll('.auth-tab');
         for (let i = 0; i < authTabs.length; i++) {
@@ -1897,10 +1948,17 @@
         // Metronome toggle
         const metronomeToggle = document.getElementById('metronome-toggle');
         if (metronomeToggle) {
-            metronomeToggle.checked = false;
+            const savedMetronome = localStorage.getItem('metronomeEnabled');
+            if (savedMetronome !== null) {
+                metronomeEnabled = savedMetronome === 'true';
+                metronomeToggle.checked = metronomeEnabled;
+            } else {
+                metronomeEnabled = false;
+                metronomeToggle.checked = false;
+            }
+            
             metronomeToggle.onchange = function(e) {
                 toggleMetronome(e.target.checked);
-                showToast(e.target.checked ? 'Metronome ON' : 'Metronome OFF');
             };
         }
         
