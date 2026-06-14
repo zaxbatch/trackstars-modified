@@ -3,32 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0a0a12">
   <title>TrackStars - Collaborative DAW</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- Tutorial Overlay -->
-  <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
-    <div class="tutorial-card">
-      <h2>🎵 Welcome to TrackStars!</h2>
-      <div class="tutorial-step" id="tutorial-step-1">
-        <div class="tutorial-icon">🎛️</div>
-        <p><strong>Create or Fork Songs</strong><br>Create your own track or fork existing ones to make your own version!</p>
-      </div>
-      <div class="tutorial-step" id="tutorial-step-2">
-        <div class="tutorial-icon">🎙️</div>
-        <p><strong>Record Your Track</strong><br>Hit record and play along with existing tracks to add your part.</p>
-      </div>
-      <div class="tutorial-step" id="tutorial-step-3">
-        <div class="tutorial-icon">👍</div>
-        <p><strong>Vote & Collaborate</strong><br>Upvote tracks you like and collaborate with other creators!</p>
-      </div>
-      <button id="tutorial-finish" class="tutorial-btn">Get Started →</button>
-    </div>
-  </div>
-
   <!-- Auth Modal -->
   <div id="auth-modal" class="modal">
     <div class="modal-content">
@@ -63,69 +43,33 @@
         <span class="username" id="current-user"></span>
         <button class="logout-btn" id="logout-btn">Logout</button>
       </div>
-            <!-- Edit Song Modal -->
-      <div id="edit-song-modal" class="modal-overlay">
-        <div class="modal-card">
-          <div class="modal-header">
-            <h3>Edit Track</h3>
-            <button class="close-edit-modal">&times;</button>
-          </div>
-          <div class="edit-song-section">
-            <label>Track Title</label>
-            <input type="text" id="edit-song-title" placeholder="Track Title">
-          </div>
-          <div class="edit-song-section">
-            <label>Thumbnail</label>
-            <div class="edit-thumb-preview">
-              <img id="edit-thumb-preview" src="">
-              <div class="edit-thumb-buttons">
-                <button id="edit-random-thumb">🎲 Random</button>
-                <button id="edit-upload-thumb">📁 Upload</button>
-                <input type="file" id="edit-thumb-file" accept="image/*" style="display:none">
-              </div>
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button id="save-song-changes" class="confirm-btn">Save Changes</button>
-            <button id="delete-song-version" class="delete-version-btn">🗑️ Delete Version</button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Bottom Navigation -->
     <div class="bottom-nav">
-      <button class="nav-item active" data-view="feed"><span>🔥</span><span>Feed</span></button>
-      <button class="nav-item" data-view="library"><span>🎵</span><span>Library</span></button>
-      <button class="nav-item" data-view="social"><span>💬</span><span>Chat</span></button>
-      <button class="nav-item" data-view="profile"><span>👤</span><span>Profile</span></button>
+      <button class="nav-item active" data-view="feed">🔥 Feed</button>
+      <button class="nav-item" data-view="library">🎵 Library</button>
+      <button class="nav-item" data-view="social">💬 Chat</button>
+      <button class="nav-item" data-view="profile">👤 Profile</button>
     </div>
 
     <!-- Feed View -->
     <div id="feed-view" class="view active">
       <div class="feed-header">
-        <h3>🔥 Activity Feed</h3>
-        <p>New tracks, forks, and trending beats</p>
+        <h3>🔥 Public Feed</h3>
+        <p>Discover new beats and trending creators</p>
       </div>
-      
       <div class="feed-section">
-        <div class="section-title">📈 Trending This Week</div>
+        <div class="section-title">📈 Trending</div>
         <div id="trending-songs" class="horizontal-scroll"><div class="loading">Loading...</div></div>
       </div>
-      
       <div class="feed-section">
         <div class="section-title">🆕 Recent Activity</div>
         <div id="activity-feed" class="activity-list"><div class="loading">Loading...</div></div>
       </div>
-      
       <div class="feed-section">
-        <div class="section-title">🏆 Top Contributors</div>
+        <div class="section-title">🏆 Top Creators</div>
         <div id="top-contributors" class="users-grid"><div class="loading">Loading...</div></div>
-      </div>
-      
-      <div class="feed-section">
-        <div class="section-title">💡 Suggested for You</div>
-        <div id="suggested-users" class="users-grid"><div class="loading">Loading...</div></div>
       </div>
     </div>
 
@@ -136,28 +80,28 @@
         <button class="create-btn" id="open-create-modal">+ New Track</button>
       </div>
       <input type="text" id="library-search" class="search-input" placeholder="🔍 Search songs...">
-      <div class="song-grid" id="song-list"><div class="loading">Loading tracks...</div></div>
+      <div id="song-list" class="song-grid"><div class="loading">Loading tracks...</div></div>
     </div>
 
-    <!-- Studio View (Dynamic - appears when song selected) -->
-    <div id="studio-view" class="view studio-view">
+    <!-- Studio View (Hidden until song selected) -->
+    <div id="studio-view" class="studio-view">
       <div class="studio-header">
         <div>
           <h2 id="current-song-title">Select a track</h2>
           <p id="song-creator"></p>
-          <div id="version-badge" class="version-badge"></div>
+          <span id="version-badge" class="version-badge"></span>
         </div>
         <div class="studio-actions">
-          <button id="fork-song-btn" class="fork-btn" style="display:none">🔀 Fork This Track</button>
+          <button id="fork-song-btn" class="fork-btn" style="display:none">🔀 Fork</button>
           <button class="back-btn" id="back-btn">← Back</button>
         </div>
       </div>
       <div class="transport">
         <button class="play-btn" id="play-btn">▶ Play</button>
         <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
-        <div class="bpm-control" id="bpm-control">
+        <div class="bpm-control">
           <span>BPM:</span>
-          <input type="number" id="bpm-input" value="120" min="40" max="300" step="1">
+          <input type="number" id="bpm-input" value="120" min="40" max="300">
           <span id="bpm-lock" class="bpm-lock">🔒</span>
         </div>
       </div>
@@ -165,9 +109,9 @@
       <div id="track-mixer"><div class="loading">Select a track to start</div></div>
       <div class="recording-panel">
         <div class="recording-controls">
-          <button class="record-btn" id="record-btn">🎙️ Record Track</button>
+          <button class="record-btn" id="record-btn">🎙️ Record</button>
           <button class="record-btn" id="stop-record-btn" style="display:none">⏹️ Stop</button>
-          <button class="upload-btn" id="upload-btn">📁 Upload Audio</button>
+          <button class="upload-btn" id="upload-btn">📁 Upload</button>
           <input type="file" id="audio-file" accept="audio/*" style="display:none">
         </div>
         <div id="recording-status" class="status"></div>
@@ -187,23 +131,13 @@
       <div class="chat-container">
         <div class="chat-header">
           <h3>💬 Messages</h3>
-          <div class="chat-search">
-            <input type="text" id="chat-search-input" placeholder="🔍 Search users...">
-          </div>
+          <input type="text" id="chat-search-input" class="chat-search" placeholder="🔍 Search users...">
         </div>
-        <div class="chat-recent" id="chat-recent">
-          <div class="loading">Loading chats...</div>
-        </div>
-        <div class="chat-conversation" id="chat-conversation" style="display:none">
-          <div class="conv-header">
-            <button id="back-to-recent">← Back</button>
-            <span id="chat-with"></span>
-          </div>
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input">
-            <input type="text" id="chat-input" placeholder="Type a message...">
-            <button id="send-chat">Send</button>
-          </div>
+        <div id="chat-recent" class="chat-recent"><div class="loading">Loading chats...</div></div>
+        <div id="chat-conversation" class="chat-conversation" style="display:none">
+          <div class="conv-header"><button id="back-to-recent">← Back</button><span id="chat-with"></span></div>
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input"><input type="text" id="chat-input" placeholder="Type a message..."><button id="send-chat">Send</button></div>
         </div>
       </div>
     </div>
@@ -220,7 +154,8 @@
         <input type="text" id="new-title" placeholder="Track Title">
         <input type="number" id="new-bpm" value="120" min="40" max="300">
         <select id="new-genre">
-          <option>Electronic</option><option>Hip Hop</option><option>Rock</option><option>Pop</option><option>Jazz</option><option>Ambient</option>
+          <option>Electronic</option><option>Hip Hop</option><option>Rock</option>
+          <option>Pop</option><option>Jazz</option><option>Ambient</option>
         </select>
         <div class="thumb-preview">
           <img id="thumb-preview">
@@ -250,6 +185,35 @@
       </div>
     </div>
 
+    <!-- Edit Song Modal -->
+    <div id="edit-song-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Edit Track</h3>
+          <button class="close-edit-modal">&times;</button>
+        </div>
+        <div class="edit-song-section">
+          <label>Track Title</label>
+          <input type="text" id="edit-song-title">
+        </div>
+        <div class="edit-song-section">
+          <label>Thumbnail</label>
+          <div class="edit-thumb-preview">
+            <img id="edit-thumb-preview">
+            <div class="edit-thumb-buttons">
+              <button id="edit-random-thumb">🎲 Random</button>
+              <button id="edit-upload-thumb">📁 Upload</button>
+              <input type="file" id="edit-thumb-file" accept="image/*" style="display:none">
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button id="save-song-changes">Save Changes</button>
+          <button id="delete-song-version" class="delete-version-btn">🗑️ Delete Version</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Profile Edit Modal -->
     <div id="profile-modal" class="modal-overlay">
       <div class="modal-card">
@@ -266,6 +230,17 @@
       <div class="modal-card">
         <div class="modal-header"><button class="close-user-modal">&times;</button></div>
         <div id="user-modal-content"></div>
+      </div>
+    </div>
+
+    <!-- Tutorial Overlay -->
+    <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
+      <div class="tutorial-card">
+        <h2>🎵 Welcome to TrackStars!</h2>
+        <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create or Fork Songs</strong><br>Create your own track or fork existing ones!</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Record Your Track</strong><br>Hit record and play along with existing tracks.</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">👍</div><p><strong>Vote & Collaborate</strong><br>Upvote tracks you like and collaborate!</p></div>
+        <button id="tutorial-finish" class="tutorial-btn">Get Started →</button>
       </div>
     </div>
   </div>
