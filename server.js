@@ -45,7 +45,6 @@ const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
-// Generate reliable thumbnails
 function generateRandomThumbnail(title) {
   const colors = ['667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', '1abc9c', 'e67e22', '9b59b6'];
   const color = colors[Math.floor(Math.random() * colors.length)];
@@ -58,7 +57,6 @@ function generateRandomAvatar(username) {
   return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&bold=true&name=${encodeURIComponent(username)}`;
 }
 
-// Multer configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let dir = 'uploads/tracks/';
@@ -128,16 +126,12 @@ app.post('/api/login', async (req, res) => {
   res.json({ token, user: { username, email: user.email, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], likedSongs: user.likedSongs || [], savedSongs: user.savedSongs || [], bio: user.bio || '', avatar: user.avatar || generateRandomAvatar(username), tutorialCompleted: user.tutorialCompleted || false } });
 });
 
-// ============ AVATAR ============
 app.post('/api/upload-avatar', authenticateToken, avatarUpload.single('avatar'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const users = readData(dataFiles.users);
-  const user = users[req.user.username];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  const avatarUrl = '/uploads/avatars/' + req.file.filename;
-  user.avatar = avatarUrl;
+  users[req.user.username].avatar = '/uploads/avatars/' + req.file.filename;
   writeData(dataFiles.users, users);
-  res.json({ avatar: avatarUrl });
+  res.json({ avatar: users[req.user.username].avatar });
 });
 
 app.put('/api/users/bio', authenticateToken, (req, res) => {
@@ -243,7 +237,21 @@ app.post('/api/messages', authenticateToken, (req, res) => {
 });
 
 // ============ SONGS ============
-app.get('/api/songs', (req, res) => {
+// Get user's own tracks (for library)
+app.get('/api/songs/my', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const userSongs = Object.values(songs).filter(s => s.creator === req.user.username);
+  const list = userSongs.map(s => ({
+    id: s.id, title: s.title, creator: s.creator,
+    thumbnail: s.thumbnail || generateRandomThumbnail(s.title),
+    bpm: s.bpm || 120, trackCount: s.tracks?.length || 0,
+    likes: s.likes || 0, createdAt: s.createdAt, genre: s.genre || 'Electronic'
+  })).sort((a, b) => b.createdAt - a.createdAt);
+  res.json(list);
+});
+
+// Get all songs (for feed and profile)
+app.get('/api/songs/all', (req, res) => {
   const songs = readData(dataFiles.songs);
   const list = Object.values(songs).map(s => ({
     id: s.id, title: s.title, creator: s.creator,
