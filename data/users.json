@@ -4,7 +4,9 @@
     "email": "sneakjunkmail@gmail.com",
     "password": "$2a$10$mPNTo8JmiALhYYptRUKFpeWHeOV6K618SyUnwC1TN1gNhkSPBXISC",
     "followers": [],
-    "following": [],
+    "following": [
+      "joe"
+    ],
     "contributedTo": [
       "77b72cf4-2016-4e9c-98db-c19a3db595be"
     ],
@@ -19,7 +21,9 @@
     "username": "joe",
     "email": "joe@email.com",
     "password": "$2a$10$xlVkURpkXx1i/uyV0IrEv.aGIkr2TB5MR3uNJc0GQtY2nxidR5vRO",
-    "followers": [],
+    "followers": [
+      "Zax"
+    ],
     "following": [],
     "contributedTo": [
       "77b72cf4-2016-4e9c-98db-c19a3db595be"

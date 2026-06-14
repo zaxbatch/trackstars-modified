@@ -478,7 +478,7 @@
             let t = tracks[i];
             let isCurrentUserTrack = (t.username === currentUser.username);
             html += '<div class="track-card ' + (t.muted ? 'muted' : '') + '">';
-            html += '<div class="track-row"><div><span class="track-name">🎧 ' + escape(t.username);
+            html += '<div class="track-row"><div><span class="track-name">🎧 <span onclick="event.stopPropagation(); window.viewUser(\'' + escape(t.username) + '\')" style="cursor:pointer; color:#667eea;">' + escape(t.username) + '</span>';
             if (isCurrentUserTrack) html += '<span class="your-track"> (Your Track)</span>';
             html += '</span><div class="track-creator" onclick="window.viewUser(\'' + escape(t.username) + '\')">Added ' + new Date(t.uploadedAt).toLocaleDateString() + '</div></div>';
             html += '<div class="track-votes">👍 ' + (t.votes || 0) + '</div></div>';
@@ -530,7 +530,7 @@
         for (let i = 0; i < comments.length; i++) {
             let c = comments[i];
             html += '<div class="comment">';
-            html += '<strong onclick="window.viewUser(\'' + escape(c.username) + '\')">' + escape(c.username) + '</strong>';
+            html += '<strong onclick="window.viewUser(\'' + escape(c.username) + '\')" style="cursor:pointer;">' + escape(c.username) + '</strong>';
             html += '<div>' + escape(c.text) + '</div>';
             html += '<small>' + new Date(c.createdAt).toLocaleString() + '</small>';
             html += '<button class="comment-like-btn" onclick="window.likeComment(\'' + c.id + '\')">❤️ ' + (c.likes || 0) + '</button>';
@@ -838,7 +838,7 @@
                         html += '<div class="activity-icon">🆕</div>';
                         html += '<div class="activity-info">';
                         html += '<div class="activity-title">' + escape(item.title) + '</div>';
-                        html += '<div class="activity-detail">Created by ' + escape(item.creator) + '</div>';
+                        html += '<div class="activity-detail">Created by <span onclick="event.stopPropagation(); window.viewUser(\'' + escape(item.creator) + '\')" style="cursor:pointer;color:#667eea;">' + escape(item.creator) + '</span></div>';
                         html += '</div>';
                         html += '<div class="activity-time">👍 ' + item.likes + '</div>';
                         html += '</div>';
@@ -893,40 +893,83 @@
         }
     };
 
-    // Profile Functions
+    // Profile Functions - Split into My Tracks and My Contributions
     async function loadProfile() {
         const container = document.getElementById('profile-content');
         if (!container) return;
         try {
             const user = await api.getUser(currentUser.username);
-            container.innerHTML = '<div class="profile-header"><img class="profile-avatar" src="' + escape(user.avatar) + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(currentUser.username) + '\'"><h2>' + escape(user.username) + '</h2>';
-            container.innerHTML += '<p class="profile-bio">' + escape(user.bio || 'Music creator on TrackStars') + '</p>';
-            container.innerHTML += '<button class="edit-profile-btn" id="edit-profile-btn">✏️ Edit Profile</button>';
-            container.innerHTML += '<div class="stats-row"><div><span>' + (user.followers?.length || 0) + '</span><label>Followers</label></div>';
-            container.innerHTML += '<div><span>' + (user.following?.length || 0) + '</span><label>Following</label></div>';
-            container.innerHTML += '<div><span>' + (user.contributedTo?.length || 0) + '</span><label>Tracks</label></div></div></div>';
-            container.innerHTML += '<div><h3>My Tracks</h3><div id="my-tracks-list"></div></div>';
+            const allSongs = await api.getSongs();
             
-            const songs = await api.getSongs();
-            let mySongs = [];
-            for (let i = 0; i < songs.length; i++) {
-                if (songs[i].creator === currentUser.username) {
-                    mySongs.push(songs[i]);
+            // Separate tracks created by user vs contributed to
+            let myCreatedTracks = [];
+            let myContributions = [];
+            
+            for (let i = 0; i < allSongs.length; i++) {
+                let song = allSongs[i];
+                if (song.creator === currentUser.username) {
+                    myCreatedTracks.push(song);
+                } else if (user.contributedTo && user.contributedTo.indexOf(song.id) !== -1) {
+                    myContributions.push(song);
                 }
             }
-            const tracksDiv = document.getElementById('my-tracks-list');
-            if (tracksDiv) {
-                if (mySongs.length === 0) {
-                    tracksDiv.innerHTML = '<div class="empty-state-small">No tracks yet. <button class="create-btn-small" id="profile-create-btn">Create one!</button></div>';
-                } else {
-                    let html = '';
-                    for (let i = 0; i < mySongs.length; i++) {
-                        let s = mySongs[i];
-                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')"><img class="song-thumb" src="' + s.thumbnail + '"><div class="song-info"><div class="song-title">' + escape(s.title) + '</div><div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
-                    }
-                    tracksDiv.innerHTML = html;
+            
+            container.innerHTML = `
+                <div class="profile-header">
+                    <img class="profile-avatar" src="${escape(user.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(currentUser.username)}'">
+                    <h2>${escape(user.username)}</h2>
+                    <p class="profile-bio">${escape(user.bio || 'Music creator on TrackStars')}</p>
+                    <button class="edit-profile-btn" id="edit-profile-btn">✏️ Edit Profile</button>
+                    <div class="stats-row">
+                        <div><span>${user.followers?.length || 0}</span><label>Followers</label></div>
+                        <div><span>${user.following?.length || 0}</span><label>Following</label></div>
+                        <div><span>${myCreatedTracks.length}</span><label>Created</label></div>
+                        <div><span>${myContributions.length}</span><label>Contributions</label></div>
+                    </div>
+                </div>
+                <div class="profile-tracks-section">
+                    <h3>🎵 My Tracks (Created by me)</h3>
+                    <div id="my-created-tracks" class="song-grid">${myCreatedTracks.length === 0 ? '<div class="empty-state-small">No tracks created yet. <button class="create-btn-small" id="profile-create-btn">Create one!</button></div>' : ''}</div>
+                </div>
+                <div class="profile-tracks-section">
+                    <h3>🎧 My Contributions (Added to other tracks)</h3>
+                    <div id="my-contributions" class="song-grid">${myContributions.length === 0 ? '<div class="empty-state-small">No contributions yet. Add your sound to other tracks!</div>' : ''}</div>
+                </div>
+            `;
+            
+            // Populate created tracks
+            const createdContainer = document.getElementById('my-created-tracks');
+            if (createdContainer && myCreatedTracks.length > 0) {
+                let html = '';
+                for (let i = 0; i < myCreatedTracks.length; i++) {
+                    let s = myCreatedTracks[i];
+                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
+                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                    html += '<div class="song-info">';
+                    html += '<div class="song-title">' + escape(s.title) + '</div>';
+                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
+                    html += '</div></div>';
                 }
+                createdContainer.innerHTML = html;
             }
+            
+            // Populate contributions
+            const contributionsContainer = document.getElementById('my-contributions');
+            if (contributionsContainer && myContributions.length > 0) {
+                let html = '';
+                for (let i = 0; i < myContributions.length; i++) {
+                    let s = myContributions[i];
+                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
+                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                    html += '<div class="song-info">';
+                    html += '<div class="song-title">' + escape(s.title) + '</div>';
+                    html += '<div class="song-creator" onclick="event.stopPropagation(); window.viewUser(\'' + escape(s.creator) + '\')">by ' + escape(s.creator) + '</div>';
+                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
+                    html += '</div></div>';
+                }
+                contributionsContainer.innerHTML = html;
+            }
+            
             const editBtn = document.getElementById('edit-profile-btn');
             if (editBtn) editBtn.onclick = openProfileModal;
             const profileCreateBtn = document.getElementById('profile-create-btn');
@@ -934,7 +977,8 @@
                 document.getElementById('open-create-modal').click(); 
             };
         } catch(e) { 
-            container.innerHTML = '<div class="loading">Error loading profile</div>'; 
+            container.innerHTML = '<div class="loading">Error loading profile</div>';
+            console.error(e);
         }
     }
 
@@ -945,7 +989,7 @@
             document.getElementById('edit-bio').value = user.bio || '';
             document.getElementById('edit-followers').textContent = user.followers?.length || 0;
             document.getElementById('edit-following').textContent = user.following?.length || 0;
-            document.getElementById('edit-tracks').textContent = user.contributedTo?.length || 0;
+            document.getElementById('edit-tracks').textContent = (user.contributedTo?.length || 0) + (user.contributedTo?.length || 0);
             const disableTutorial = document.getElementById('disable-tutorial');
             if (disableTutorial) disableTutorial.checked = user.tutorialCompleted;
             document.getElementById('profile-modal').style.display = 'flex';
@@ -1120,41 +1164,78 @@
             const modal = document.getElementById('user-modal');
             const modalContent = document.getElementById('user-modal-content');
             if (!modal || !modalContent) return;
-            modalContent.innerHTML = '<div class="user-profile-detail"><img class="view-avatar" src="' + escape(user.avatar) + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(username) + '\'"><h2>' + escape(user.username) + '</h2>';
-            modalContent.innerHTML += '<p class="view-bio">' + escape(user.bio || 'Music creator') + '</p>';
-            modalContent.innerHTML += '<div><button class="follow-btn ' + (isFollowing ? 'following' : '') + '" onclick="window.followUser(\'' + escape(username) + '\', this)">' + (isFollowing ? 'Following' : 'Follow') + '</button>';
-            modalContent.innerHTML += '<button class="message-btn" onclick="window.startChat(\'' + escape(username) + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">💬 Message</button></div>';
-            modalContent.innerHTML += '<div class="stats-row"><div><span>' + (user.followers?.length || 0) + '</span><label>Followers</label></div>';
-            modalContent.innerHTML += '<div><span>' + (user.following?.length || 0) + '</span><label>Following</label></div>';
-            modalContent.innerHTML += '<div><span>' + (user.contributedTo?.length || 0) + '</span><label>Tracks</label></div></div>';
-            modalContent.innerHTML += '<div><h4>🎵 Tracks</h4><div id="user-tracks-list"></div></div></div>';
             
-            const songs = await api.getSongs();
-            let userSongs = [];
-            for (let i = 0; i < songs.length; i++) {
-                let s = songs[i];
-                if ((user.contributedTo && user.contributedTo.indexOf(s.id) !== -1) || s.creator === username) {
-                    userSongs.push(s);
+            const allSongs = await api.getSongs();
+            let userCreatedTracks = [];
+            let userContributions = [];
+            
+            for (let i = 0; i < allSongs.length; i++) {
+                let s = allSongs[i];
+                if (s.creator === username) {
+                    userCreatedTracks.push(s);
+                } else if (user.contributedTo && user.contributedTo.indexOf(s.id) !== -1) {
+                    userContributions.push(s);
                 }
             }
-            const tracksDiv = document.getElementById('user-tracks-list');
-            if (tracksDiv) {
-                if (userSongs.length === 0) {
-                    tracksDiv.innerHTML = '<div style="color:#888;text-align:center">No tracks yet</div>';
-                } else {
-                    let html = '';
-                    for (let i = 0; i < userSongs.length; i++) {
-                        let s = userSongs[i];
-                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
-                        html += '<img class="song-thumb" src="' + s.thumbnail + '"><div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
-                        html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks</div></div></div>';
-                    }
-                    tracksDiv.innerHTML = html;
+            
+            modalContent.innerHTML = `
+                <div class="user-profile-detail">
+                    <img class="view-avatar" src="${escape(user.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(username)}'">
+                    <h2>${escape(user.username)}</h2>
+                    <p class="view-bio">${escape(user.bio || 'Music creator')}</p>
+                    <div>
+                        <button class="follow-btn ${isFollowing ? 'following' : ''}" onclick="window.followUser('${escape(username)}', this)">${isFollowing ? 'Following' : 'Follow'}</button>
+                        <button class="message-btn" onclick="window.startChat('${escape(username)}'); document.getElementById('user-modal').style.display = 'none';">💬 Message</button>
+                    </div>
+                    <div class="stats-row">
+                        <div><span>${user.followers?.length || 0}</span><label>Followers</label></div>
+                        <div><span>${user.following?.length || 0}</span><label>Following</label></div>
+                        <div><span>${userCreatedTracks.length}</span><label>Created</label></div>
+                        <div><span>${userContributions.length}</span><label>Contributions</label></div>
+                    </div>
+                    <div class="profile-tracks-section">
+                        <h4>🎵 Tracks Created</h4>
+                        <div id="user-created-tracks" class="song-grid">${userCreatedTracks.length === 0 ? '<div class="empty-state-small">No tracks created yet</div>' : ''}</div>
+                    </div>
+                    <div class="profile-tracks-section">
+                        <h4>🎧 Contributions</h4>
+                        <div id="user-contributions" class="song-grid">${userContributions.length === 0 ? '<div class="empty-state-small">No contributions yet</div>' : ''}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Populate created tracks            const createdContainer = document.getElementById('user-created-tracks');
+            if (createdContainer && userCreatedTracks.length > 0) {
+                let html = '';
+                for (let i = 0; i < userCreatedTracks.length; i++) {
+                    let s = userCreatedTracks[i];
+                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
+                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                    html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
+                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
                 }
+                createdContainer.innerHTML = html;
             }
+            
+            // Populate contributions
+            const contributionsContainer = document.getElementById('user-contributions');
+            if (contributionsContainer && userContributions.length > 0) {
+                let html = '';
+                for (let i = 0; i < userContributions.length; i++) {
+                    let s = userContributions[i];
+                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
+                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                    html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
+                    html += '<div class="song-creator">by ' + escape(s.creator) + '</div>';
+                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+                }
+                contributionsContainer.innerHTML = html;
+            }
+            
             modal.style.display = 'flex';
         } catch(e) { 
             showToast('Error loading profile'); 
+            console.error(e);
         }
     };
 
