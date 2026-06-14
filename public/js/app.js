@@ -358,9 +358,11 @@
         if (songs.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎵</div><h3>No tracks yet</h3><p>Create your first track to get started!</p><button class="create-btn" id="empty-create-btn">+ Create New Track</button></div>';
             const emptyBtn = document.getElementById('empty-create-btn');
-            if (emptyBtn) emptyBtn.onclick = function() { 
-                document.getElementById('open-create-modal').click(); 
-            };
+            if (emptyBtn) {
+                emptyBtn.onclick = function() { 
+                    document.getElementById('open-create-modal').click(); 
+                };
+            }
             return;
         }
         let html = '';
@@ -396,19 +398,31 @@
         }
     }
 
+    // Make selectSong globally accessible and ensure it works
     window.selectSong = async function(id) {
+        console.log('selectSong called with id:', id);
         try {
+            // Stop any ongoing playback
             if (isPlaying) stopPlayback();
             if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-            if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-            if (audioCtx) await audioCtx.close();
+            if (stream) {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                stream = null;
+            }
+            if (audioCtx) {
+                await audioCtx.close();
+                audioCtx = null;
+            }
             buffers.clear(); 
             sources = []; 
             gains.clear();
-            audioCtx = null;
+            
+            // Fetch the song data
             currentSong = await api.getSong(id);
+            console.log('Song loaded:', currentSong.title);
             isOwner = (currentSong.creator === currentUser.username);
             
+            // Update UI elements
             const titleEl = document.getElementById('current-song-title');
             const creatorEl = document.getElementById('song-creator');
             const bpmInput = document.getElementById('bpm-input');
@@ -428,15 +442,21 @@
             }
             bpm = currentSong.bpm;
             
+            // Join the song room via socket
             if (socket) socket.emit('join-song', id);
+            
+            // Display tracks and comments
             displayTracks();
             displayComments();
             
+            // Check if user already has a track
             let hasTrack = false;
-            for (let i = 0; i < currentSong.tracks.length; i++) {
-                if (currentSong.tracks[i].username === currentUser.username) {
-                    hasTrack = true;
-                    break;
+            if (currentSong.tracks) {
+                for (let i = 0; i < currentSong.tracks.length; i++) {
+                    if (currentSong.tracks[i].username === currentUser.username) {
+                        hasTrack = true;
+                        break;
+                    }
                 }
             }
             const recBtn = document.getElementById('record-btn');
@@ -446,22 +466,28 @@
             currentPos = 0;
             updateDisplay(0);
             
+            // Hide all regular views
             const views = document.querySelectorAll('.view');
             for (let i = 0; i < views.length; i++) {
                 views[i].classList.remove('active');
             }
+            
+            // Show studio view
             const studioView = document.getElementById('studio-view');
             if (studioView) {
                 studioView.classList.add('active');
                 studioView.style.display = 'block';
             }
+            
+            // Remove active class from nav items
             const navItems = document.querySelectorAll('.nav-item');
             for (let i = 0; i < navItems.length; i++) {
                 navItems[i].classList.remove('active');
             }
+            
         } catch(e) { 
-            showToast('Error loading song'); 
-            console.error(e); 
+            console.error('Error loading song:', e);
+            showToast('Error loading song: ' + e.message); 
         }
     };
 
@@ -893,7 +919,7 @@
         }
     };
 
-    // Profile Functions - Split into My Tracks and My Contributions
+    // Profile Functions
     async function loadProfile() {
         const container = document.getElementById('profile-content');
         if (!container) return;
@@ -901,7 +927,6 @@
             const user = await api.getUser(currentUser.username);
             const allSongs = await api.getSongs();
             
-            // Separate tracks created by user vs contributed to
             let myCreatedTracks = [];
             let myContributions = [];
             
@@ -929,53 +954,61 @@
                 </div>
                 <div class="profile-tracks-section">
                     <h3>🎵 My Tracks (Created by me)</h3>
-                    <div id="my-created-tracks" class="song-grid">${myCreatedTracks.length === 0 ? '<div class="empty-state-small">No tracks created yet. <button class="create-btn-small" id="profile-create-btn">Create one!</button></div>' : ''}</div>
+                    <div id="my-created-tracks" class="song-grid"></div>
                 </div>
                 <div class="profile-tracks-section">
                     <h3>🎧 My Contributions (Added to other tracks)</h3>
-                    <div id="my-contributions" class="song-grid">${myContributions.length === 0 ? '<div class="empty-state-small">No contributions yet. Add your sound to other tracks!</div>' : ''}</div>
+                    <div id="my-contributions" class="song-grid"></div>
                 </div>
             `;
             
-            // Populate created tracks
             const createdContainer = document.getElementById('my-created-tracks');
-            if (createdContainer && myCreatedTracks.length > 0) {
-                let html = '';
-                for (let i = 0; i < myCreatedTracks.length; i++) {
-                    let s = myCreatedTracks[i];
-                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
-                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
-                    html += '<div class="song-info">';
-                    html += '<div class="song-title">' + escape(s.title) + '</div>';
-                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
-                    html += '</div></div>';
+            if (createdContainer) {
+                if (myCreatedTracks.length === 0) {
+                    createdContainer.innerHTML = '<div class="empty-state-small">No tracks created yet. <button class="create-btn-small" id="profile-create-btn">Create one!</button></div>';
+                } else {
+                    let html = '';
+                    for (let i = 0; i < myCreatedTracks.length; i++) {
+                        let s = myCreatedTracks[i];
+                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
+                        html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                        html += '<div class="song-info">';
+                        html += '<div class="song-title">' + escape(s.title) + '</div>';
+                        html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
+                        html += '</div></div>';
+                    }
+                    createdContainer.innerHTML = html;
                 }
-                createdContainer.innerHTML = html;
             }
             
-            // Populate contributions
             const contributionsContainer = document.getElementById('my-contributions');
-            if (contributionsContainer && myContributions.length > 0) {
-                let html = '';
-                for (let i = 0; i < myContributions.length; i++) {
-                    let s = myContributions[i];
-                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
-                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
-                    html += '<div class="song-info">';
-                    html += '<div class="song-title">' + escape(s.title) + '</div>';
-                    html += '<div class="song-creator" onclick="event.stopPropagation(); window.viewUser(\'' + escape(s.creator) + '\')">by ' + escape(s.creator) + '</div>';
-                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
-                    html += '</div></div>';
+            if (contributionsContainer) {
+                if (myContributions.length === 0) {
+                    contributionsContainer.innerHTML = '<div class="empty-state-small">No contributions yet. Add your sound to other tracks!</div>';
+                } else {
+                    let html = '';
+                    for (let i = 0; i < myContributions.length; i++) {
+                        let s = myContributions[i];
+                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')">';
+                        html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                        html += '<div class="song-info">';
+                        html += '<div class="song-title">' + escape(s.title) + '</div>';
+                        html += '<div class="song-creator" onclick="event.stopPropagation(); window.viewUser(\'' + escape(s.creator) + '\')">by ' + escape(s.creator) + '</div>';
+                        html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes</div>';
+                        html += '</div></div>';
+                    }
+                    contributionsContainer.innerHTML = html;
                 }
-                contributionsContainer.innerHTML = html;
             }
             
             const editBtn = document.getElementById('edit-profile-btn');
             if (editBtn) editBtn.onclick = openProfileModal;
             const profileCreateBtn = document.getElementById('profile-create-btn');
-            if (profileCreateBtn) profileCreateBtn.onclick = function() { 
-                document.getElementById('open-create-modal').click(); 
-            };
+            if (profileCreateBtn) {
+                profileCreateBtn.onclick = function() { 
+                    document.getElementById('open-create-modal').click(); 
+                };
+            }
         } catch(e) { 
             container.innerHTML = '<div class="loading">Error loading profile</div>';
             console.error(e);
@@ -989,7 +1022,7 @@
             document.getElementById('edit-bio').value = user.bio || '';
             document.getElementById('edit-followers').textContent = user.followers?.length || 0;
             document.getElementById('edit-following').textContent = user.following?.length || 0;
-            document.getElementById('edit-tracks').textContent = (user.contributedTo?.length || 0) + (user.contributedTo?.length || 0);
+            document.getElementById('edit-tracks').textContent = (user.contributedTo?.length || 0);
             const disableTutorial = document.getElementById('disable-tutorial');
             if (disableTutorial) disableTutorial.checked = user.tutorialCompleted;
             document.getElementById('profile-modal').style.display = 'flex';
@@ -1195,41 +1228,48 @@
                     </div>
                     <div class="profile-tracks-section">
                         <h4>🎵 Tracks Created</h4>
-                        <div id="user-created-tracks" class="song-grid">${userCreatedTracks.length === 0 ? '<div class="empty-state-small">No tracks created yet</div>' : ''}</div>
+                        <div id="user-created-tracks" class="song-grid"></div>
                     </div>
                     <div class="profile-tracks-section">
                         <h4>🎧 Contributions</h4>
-                        <div id="user-contributions" class="song-grid">${userContributions.length === 0 ? '<div class="empty-state-small">No contributions yet</div>' : ''}</div>
+                        <div id="user-contributions" class="song-grid"></div>
                     </div>
                 </div>
             `;
             
-            // Populate created tracks            const createdContainer = document.getElementById('user-created-tracks');
-            if (createdContainer && userCreatedTracks.length > 0) {
-                let html = '';
-                for (let i = 0; i < userCreatedTracks.length; i++) {
-                    let s = userCreatedTracks[i];
-                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
-                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
-                    html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
-                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+            const createdContainer = document.getElementById('user-created-tracks');
+            if (createdContainer) {
+                if (userCreatedTracks.length === 0) {
+                    createdContainer.innerHTML = '<div class="empty-state-small">No tracks created yet</div>';
+                } else {
+                    let html = '';
+                    for (let i = 0; i < userCreatedTracks.length; i++) {
+                        let s = userCreatedTracks[i];
+                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
+                        html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                        html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
+                        html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+                    }
+                    createdContainer.innerHTML = html;
                 }
-                createdContainer.innerHTML = html;
             }
             
-            // Populate contributions
             const contributionsContainer = document.getElementById('user-contributions');
-            if (contributionsContainer && userContributions.length > 0) {
-                let html = '';
-                for (let i = 0; i < userContributions.length; i++) {
-                    let s = userContributions[i];
-                    html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
-                    html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
-                    html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
-                    html += '<div class="song-creator">by ' + escape(s.creator) + '</div>';
-                    html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+            if (contributionsContainer) {
+                if (userContributions.length === 0) {
+                    contributionsContainer.innerHTML = '<div class="empty-state-small">No contributions yet</div>';
+                } else {
+                    let html = '';
+                    for (let i = 0; i < userContributions.length; i++) {
+                        let s = userContributions[i];
+                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\'); document.getElementById(\'user-modal\').style.display = \'none\';">';
+                        html += '<img class="song-thumb" src="' + s.thumbnail + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(s.title.substring(0,2)) + '\'">';
+                        html += '<div class="song-info"><div class="song-title">' + escape(s.title) + '</div>';
+                        html += '<div class="song-creator">by ' + escape(s.creator) + '</div>';
+                        html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+                    }
+                    contributionsContainer.innerHTML = html;
                 }
-                contributionsContainer.innerHTML = html;
             }
             
             modal.style.display = 'flex';
