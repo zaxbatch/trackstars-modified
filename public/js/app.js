@@ -452,8 +452,24 @@
             }
             const recBtn = document.getElementById('record-btn');
             const upBtn = document.getElementById('upload-btn');
+            
             if (recBtn) recBtn.disabled = hasTrack;
             if (upBtn) upBtn.disabled = hasTrack;
+            
+            // BLINK EFFECT - Flash record/upload buttons if user doesn't have a track
+            if (!hasTrack && recBtn && upBtn) {
+                recBtn.classList.remove('blink-record');
+                upBtn.classList.remove('blink-upload');
+                void recBtn.offsetWidth;
+                void upBtn.offsetWidth;
+                recBtn.classList.add('blink-record');
+                upBtn.classList.add('blink-upload');
+                setTimeout(function() {
+                    if (recBtn) recBtn.classList.remove('blink-record');
+                    if (upBtn) upBtn.classList.remove('blink-upload');
+                }, 3000);
+            }
+            
             currentPos = 0;
             updateDisplay(0);
             
@@ -664,18 +680,12 @@
         const thumbnail = thumbPreview ? thumbPreview.src : null;
         try {
             const song = await api.createSong({ title, bpm: b, genre, thumbnail: (thumbnail && thumbnail.indexOf('ui-avatars') !== -1) ? thumbnail : null });
-            showToast('Song created! Now add your first track!');
+            showToast('Song created!');
             document.getElementById('create-modal').style.display = 'none';
             document.getElementById('new-title').value = '';
             loadMySongs(); 
             loadFeed(); 
             await window.selectSong(song.id);
-            setTimeout(function() {
-                const addTrack = confirm('Would you like to add a track to your new song?');
-                if (addTrack) {
-                    document.getElementById('record-btn').click();
-                }
-            }, 500);
         } catch(e) { 
             showToast('Error creating song'); 
         }

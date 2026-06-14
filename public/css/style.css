@@ -41,6 +41,45 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .studio-view { display: none; padding: 16px; position: fixed; top: 60px; left: 0; right: 0; bottom: 70px; overflow-y: auto; background: #0a0a12; z-index: 90; }
 .studio-view.active { display: block; }
 
+/* Recording Panel - Top placement */
+.recording-panel-top {
+  background: #1a1a2e;
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.recording-panel-top .recording-controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Blinking animation for buttons */
+@keyframes blink {
+  0% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  50% { opacity: 0.7; transform: scale(1.02); box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+  100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+@keyframes blink-blue {
+  0% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7); }
+  50% { opacity: 0.7; transform: scale(1.02); box-shadow: 0 0 0 8px rgba(52, 152, 219, 0); }
+  100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
+}
+
+.blink-record {
+  animation: blink 1s ease-in-out 3;
+}
+
+.blink-upload {
+  animation: blink-blue 1s ease-in-out 3;
+}
+
+.record-btn:disabled, .upload-btn:disabled {
+  animation: none !important;
+}
+
 /* Feed */
 .feed-header { margin-bottom: 20px; }
 .feed-header h3 { font-size: 22px; margin-bottom: 4px; }
@@ -152,9 +191,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .fx-btn { padding: 6px 12px; background: #2d2d3f; border: none; border-radius: 20px; color: #fff; cursor: pointer; font-size: 11px; }
 .fx-btn.active { background: #667eea; }
 
-/* Recording */
-.recording-panel { background: #1a1a2e; border-radius: 16px; padding: 16px; margin-top: 16px; }
-.recording-controls { display: flex; gap: 12px; flex-wrap: wrap; }
+/* Recording Controls */
 .record-btn, .upload-btn { padding: 12px 20px; border: none; border-radius: 40px; font-weight: bold; cursor: pointer; }
 .record-btn { background: #e74c3c; color: white; }
 .upload-btn { background: #3498db; color: white; }
@@ -316,6 +353,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   .comment-input-area button { width: 100%; }
   .stats-row { gap: 16px; }
   .export-options { flex-direction: column; }
+  .recording-panel-top .recording-controls { justify-content: center; }
 }
 
 @media (min-width: 769px) {

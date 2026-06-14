@@ -95,6 +95,18 @@
           <button class="back-btn" id="back-btn">← Back</button>
         </div>
       </div>
+      
+      <!-- Recording Controls - Moved to top, below header -->
+      <div class="recording-panel-top">
+        <div class="recording-controls">
+          <button class="record-btn" id="record-btn">🎙️ Record</button>
+          <button class="record-btn" id="stop-record-btn" style="display:none">⏹️ Stop</button>
+          <button class="upload-btn" id="upload-btn">📁 Upload</button>
+          <input type="file" id="audio-file" accept="audio/*" style="display:none">
+        </div>
+        <div id="recording-status" class="status"></div>
+      </div>
+      
       <div class="transport">
         <button class="play-btn" id="play-btn">▶ Play</button>
         <button class="stop-btn" id="stop-btn">⏹️ Stop</button>
@@ -106,15 +118,6 @@
       </div>
       <div class="position-display" id="position-display">00:00:00</div>
       <div id="track-mixer"><div class="loading">Select a track to start</div></div>
-      <div class="recording-panel">
-        <div class="recording-controls">
-          <button class="record-btn" id="record-btn">🎙️ Record</button>
-          <button class="record-btn" id="stop-record-btn" style="display:none">⏹️ Stop</button>
-          <button class="upload-btn" id="upload-btn">📁 Upload</button>
-          <input type="file" id="audio-file" accept="audio/*" style="display:none">
-        </div>
-        <div id="recording-status" class="status"></div>
-      </div>
       <div class="comments-section">
         <h4>💬 Comments</h4>
         <div id="comments-list" class="comments-list"></div>
@@ -221,7 +224,6 @@
         <p>Export your complete mix as an audio file</p>
         <div class="export-options">
           <button id="export-wav" class="export-option-btn">WAV (High Quality)</button>
-          <button id="export-mp3" class="export-option-btn">MP3 (Compressed)</button>
         </div>
         <div id="export-progress" class="export-progress" style="display:none">
           <div class="progress-bar"><div id="export-progress-bar" class="progress-fill"></div></div>
