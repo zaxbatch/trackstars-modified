@@ -28,6 +28,26 @@
           "distortionAmount": 0.3,
           "lowpassFreq": 1000
         }
+      },
+      {
+        "id": "a9709771-2926-4ea8-ba23-79f9e4264d9e",
+        "username": "joe",
+        "audioUrl": "/uploads/tracks/1781402337708-ffe63df1-693a-48d2-9d2d-b156e39525df.webm",
+        "uploadedAt": 1781402337741,
+        "volume": 0.8,
+        "muted": false,
+        "votes": 0,
+        "voters": {},
+        "fx": {
+          "reverb": false,
+          "delay": false,
+          "distortion": false,
+          "lowpass": false,
+          "reverbAmount": 0.3,
+          "delayAmount": 0.3,
+          "distortionAmount": 0.3,
+          "lowpassFreq": 1000
+        }
       }
     ],
     "upvotes": 0,

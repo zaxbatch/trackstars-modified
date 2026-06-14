@@ -39,7 +39,7 @@
     <div class="header">
       <div class="logo">⭐ TRACKSTARS</div>
       <div class="user-info">
-        <img id="header-avatar" class="header-avatar" src="" alt="">
+        <img id="header-avatar" class="header-avatar" src="" alt="" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&bold=true&name='+encodeURIComponent(document.getElementById('current-user')?.innerText||'User')">
         <span class="username" id="current-user"></span>
         <button class="logout-btn" id="logout-btn">Logout</button>
       </div>
@@ -83,16 +83,14 @@
       <div id="song-list" class="song-grid"><div class="loading">Loading tracks...</div></div>
     </div>
 
-    <!-- Studio View - Hidden by default, only shows when song selected -->
+    <!-- Studio View -->
     <div id="studio-view" class="studio-view" style="display: none;">
       <div class="studio-header">
         <div>
           <h2 id="current-song-title">Select a track</h2>
           <p id="song-creator"></p>
-          <div id="version-info" class="version-info"></div>
         </div>
         <div class="studio-actions">
-          <button id="view-versions-btn" class="versions-btn" style="display:none">🌳 View Versions</button>
           <button class="back-btn" id="back-btn">← Back</button>
         </div>
       </div>
@@ -175,14 +173,8 @@
     <!-- Edit Song Modal -->
     <div id="edit-song-modal" class="modal-overlay">
       <div class="modal-card">
-        <div class="modal-header">
-          <h3>Edit Track</h3>
-          <button class="close-edit-modal">&times;</button>
-        </div>
-        <div class="edit-song-section">
-          <label>Track Title</label>
-          <input type="text" id="edit-song-title">
-        </div>
+        <div class="modal-header"><h3>Edit Track</h3><button class="close-edit-modal">&times;</button></div>
+        <div class="edit-song-section"><label>Track Title</label><input type="text" id="edit-song-title"></div>
         <div class="edit-song-section">
           <label>Thumbnail</label>
           <div class="edit-thumb-preview">
@@ -196,7 +188,7 @@
         </div>
         <div class="modal-buttons">
           <button id="save-song-changes">Save Changes</button>
-          <button id="delete-song-version" class="delete-version-btn">🗑️ Delete Version</button>
+          <button id="delete-song-version" class="delete-version-btn">🗑️ Delete Track</button>
         </div>
       </div>
     </div>
@@ -208,11 +200,7 @@
         <div class="avatar-section"><img id="edit-avatar"><button id="change-avatar">Change Avatar</button><input type="file" id="avatar-file" accept="image/*" style="display:none"></div>
         <textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..."></textarea>
         <div class="stats-row"><div><span id="edit-followers">0</span><label>Followers</label></div><div><span id="edit-following">0</span><label>Following</label></div><div><span id="edit-tracks">0</span><label>Tracks</label></div></div>
-        <div class="checkbox-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="disable-tutorial"> Disable Tutorial
-          </label>
-        </div>
+        <div class="checkbox-row"><label class="checkbox-label"><input type="checkbox" id="disable-tutorial"> Disable Tutorial</label></div>
         <button id="save-profile">Save Changes</button>
       </div>
     </div>
@@ -225,32 +213,14 @@
       </div>
     </div>
 
-    <!-- Versions Modal -->
-    <div id="versions-modal" class="modal-overlay">
-      <div class="modal-card versions-modal-card">
-        <div class="modal-header">
-          <h3>🌳 Version Tree</h3>
-          <button class="close-versions-modal">&times;</button>
-        </div>
-        <div id="version-tree" class="version-tree"></div>
-        <div class="modal-buttons">
-          <button id="close-versions" class="cancel-btn">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tutorial Overlay -->
+    <!-- Tutorial -->
     <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
       <div class="tutorial-card">
         <h2>🎵 Welcome to TrackStars!</h2>
         <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create a Track</strong><br>Start by creating your own original track.</p></div>
         <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Add Your Sound</strong><br>Record or upload your audio to a track.</p></div>
-        <div class="tutorial-step"><div class="tutorial-icon">🌳</div><p><strong>Version Tree</strong><br>See all versions and how they connect to the original.</p></div>
-        <div class="checkbox-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="tutorial-dont-show"> Don't show again
-          </label>
-        </div>
+        <div class="tutorial-step"><div class="tutorial-icon">👍</div><p><strong>Vote & Comment</strong><br>Upvote tracks you like and leave comments!</p></div>
+        <div class="checkbox-row"><label class="checkbox-label"><input type="checkbox" id="tutorial-dont-show"> Don't show again</label></div>
         <button id="tutorial-finish" class="tutorial-btn">Get Started →</button>
       </div>
     </div>

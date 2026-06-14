@@ -12,7 +12,8 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  transports: ['websocket', 'polling']
 });
 
 app.use(express.json());
@@ -20,7 +21,8 @@ app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
 // Create directories
-['data', 'uploads', 'uploads/tracks', 'uploads/avatars', 'uploads/thumbnails'].forEach(dir => {
+const dirs = ['data', 'uploads', 'uploads/tracks', 'uploads/avatars', 'uploads/thumbnails'];
+dirs.forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -43,39 +45,45 @@ const writeData = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 };
 
+// Generate reliable thumbnails
 function generateRandomThumbnail(title) {
-  const imageIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-  const id = imageIds[Math.floor(Math.random() * imageIds.length)];
-  return `https://picsum.photos/id/${id}/200/200`;
+  const colors = ['667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db', '1abc9c', 'e67e22', '9b59b6'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&fontsize=80&length=2&bold=true&name=${encodeURIComponent(title.substring(0, 2))}`;
 }
 
 function generateRandomAvatar(username) {
-  const id = Math.floor(Math.random() * 100) + 1;
-  return `https://picsum.photos/id/${id}/200/200`;
+  const colors = ['667eea', '764ba2', 'f39c12', 'e74c3c', '27ae60', '3498db'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  return `https://ui-avatars.com/api/?background=${color}&color=fff&size=200&bold=true&name=${encodeURIComponent(username)}`;
 }
 
+// Multer configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if (file.fieldname === 'avatar') cb(null, 'uploads/avatars/');
-    else if (file.fieldname === 'thumbnail') cb(null, 'uploads/thumbnails/');
-    else cb(null, 'uploads/tracks/');
+    let dir = 'uploads/tracks/';
+    if (file.fieldname === 'avatar') dir = 'uploads/avatars/';
+    else if (file.fieldname === 'thumbnail') dir = 'uploads/thumbnails/';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.fieldname === 'avatar' || file.fieldname === 'thumbnail') {
-      const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      cb(null, allowed.includes(file.mimetype));
-    } else {
-      const allowed = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/mp3'];
-      cb(null, allowed.includes(file.mimetype));
-    }
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`);
   }
 });
+
+const fileFilter = (req, file, cb) => {
+  if (file.fieldname === 'avatar' || file.fieldname === 'thumbnail') {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
+  } else {
+    const allowed = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/mp3'];
+    cb(null, allowed.includes(file.mimetype));
+  }
+};
+
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+const avatarUpload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter });
 
 const authenticateToken = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
@@ -117,15 +125,19 @@ app.post('/api/login', async (req, res) => {
   if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ error: 'Wrong password' });
   
   const token = jwt.sign({ username }, process.env.JWT_SECRET || 'trackstars-secret');
-  res.json({ token, user: { username, email: user.email, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], likedSongs: user.likedSongs || [], savedSongs: user.savedSongs || [], bio: user.bio || '', avatar: user.avatar, tutorialCompleted: user.tutorialCompleted || false } });
+  res.json({ token, user: { username, email: user.email, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], likedSongs: user.likedSongs || [], savedSongs: user.savedSongs || [], bio: user.bio || '', avatar: user.avatar || generateRandomAvatar(username), tutorialCompleted: user.tutorialCompleted || false } });
 });
 
-app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+// ============ AVATAR ============
+app.post('/api/upload-avatar', authenticateToken, avatarUpload.single('avatar'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const users = readData(dataFiles.users);
-  users[req.user.username].avatar = '/uploads/avatars/' + req.file.filename;
+  const user = users[req.user.username];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const avatarUrl = '/uploads/avatars/' + req.file.filename;
+  user.avatar = avatarUrl;
   writeData(dataFiles.users, users);
-  res.json({ avatar: users[req.user.username].avatar });
+  res.json({ avatar: avatarUrl });
 });
 
 app.put('/api/users/bio', authenticateToken, (req, res) => {
@@ -137,9 +149,7 @@ app.put('/api/users/bio', authenticateToken, (req, res) => {
 
 app.put('/api/users/tutorial', authenticateToken, (req, res) => {
   const users = readData(dataFiles.users);
-  const user = users[req.user.username];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  user.tutorialCompleted = req.body.completed;
+  users[req.user.username].tutorialCompleted = req.body.completed;
   writeData(dataFiles.users, users);
   res.json({ success: true });
 });
@@ -147,31 +157,29 @@ app.put('/api/users/tutorial', authenticateToken, (req, res) => {
 // ============ USERS ============
 app.get('/api/users', authenticateToken, (req, res) => {
   const users = readData(dataFiles.users);
-  const currentUserData = users[req.user.username];
-  const following = currentUserData.following || [];
+  const current = users[req.user.username];
   res.json(Object.keys(users).map(u => ({ 
     username: u, 
-    avatar: users[u].avatar, 
+    avatar: users[u].avatar || generateRandomAvatar(u), 
     followersCount: users[u].followers?.length || 0,
-    isFollowing: following.includes(u)
+    isFollowing: current?.following?.includes(u) || false
   })));
 });
 
 app.get('/api/users/search', authenticateToken, (req, res) => {
   const { q } = req.query;
   const users = readData(dataFiles.users);
-  const currentUserData = users[req.user.username];
-  const following = currentUserData.following || [];
+  const current = users[req.user.username];
   const results = Object.keys(users)
     .filter(u => u !== req.user.username && u.toLowerCase().includes((q || '').toLowerCase()))
-    .map(u => ({ username: u, avatar: users[u].avatar, followersCount: users[u].followers?.length || 0, isFollowing: following.includes(u) }));
+    .map(u => ({ username: u, avatar: users[u].avatar || generateRandomAvatar(u), followersCount: users[u].followers?.length || 0, isFollowing: current?.following?.includes(u) || false }));
   res.json(results);
 });
 
 app.get('/api/users/:username', authenticateToken, (req, res) => {
   const user = readData(dataFiles.users)[req.params.username];
   if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json({ username: user.username, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], bio: user.bio || '', avatar: user.avatar, createdAt: user.createdAt });
+  res.json({ username: user.username, followers: user.followers || [], following: user.following || [], contributedTo: user.contributedTo || [], bio: user.bio || '', avatar: user.avatar || generateRandomAvatar(user.username), createdAt: user.createdAt });
 });
 
 app.post('/api/users/:username/follow', authenticateToken, (req, res) => {
@@ -198,17 +206,16 @@ app.post('/api/users/:username/follow', authenticateToken, (req, res) => {
 app.get('/api/messages/recent', authenticateToken, (req, res) => {
   const messages = readData(dataFiles.messages);
   const users = readData(dataFiles.users);
-  const currentUserData = users[req.user.username];
-  const following = currentUserData.following || [];
+  const current = users[req.user.username];
   const recentChats = new Map();
   
   Object.keys(messages).forEach(convId => {
     const [u1, u2] = convId.split('-');
     const otherUser = u1 === req.user.username ? u2 : u1;
     const lastMsg = messages[convId][messages[convId].length - 1];
-    if (lastMsg && (following.includes(otherUser) || messages[convId].some(m => m.from === req.user.username || m.to === req.user.username))) {
+    if (lastMsg && (current?.following?.includes(otherUser) || messages[convId].some(m => m.from === req.user.username || m.to === req.user.username))) {
       if (!recentChats.has(otherUser) || recentChats.get(otherUser).timestamp < lastMsg.timestamp) {
-        recentChats.set(otherUser, { ...lastMsg, otherUser, avatar: users[otherUser]?.avatar });
+        recentChats.set(otherUser, { ...lastMsg, otherUser, avatar: users[otherUser]?.avatar || generateRandomAvatar(otherUser) });
       }
     }
   });
@@ -235,100 +242,14 @@ app.post('/api/messages', authenticateToken, (req, res) => {
   res.json(msg);
 });
 
-// ============ VERSION CONTROL ============
-// Get version tree (original + all child versions)
-app.get('/api/songs/:id/version-tree', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  
-  const buildTree = (songId, depth = 0) => {
-    const song = songs[songId];
-    if (!song) return null;
-    return {
-      id: song.id,
-      title: song.title,
-      creator: song.creator,
-      thumbnail: song.thumbnail,
-      trackCount: song.tracks?.length || 0,
-      likes: song.likes || 0,
-      bpm: song.bpm,
-      genre: song.genre,
-      createdAt: song.createdAt,
-      parentId: song.parentId,
-      depth: depth,
-      isOwner: song.creator === req.user.username,
-      children: (song.children || []).map(childId => buildTree(childId, depth + 1))
-    };
-  };
-  
-  // Find root (original)
-  const findRoot = (songId) => {
-    const song = songs[songId];
-    if (!song) return null;
-    if (!song.parentId) return song;
-    return findRoot(song.parentId);
-  };
-  
-  const root = findRoot(req.params.id);
-  if (!root) return res.status(404).json({ error: 'Original not found' });
-  
-  const tree = buildTree(root.id);
-  res.json(tree);
-});
-
-// Get all versions of a song (original + all children)
-app.get('/api/songs/:id/all-versions', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  
-  // Find root
-  const findRoot = (songId) => {
-    const song = songs[songId];
-    if (!song) return null;
-    if (!song.parentId) return song;
-    return findRoot(song.parentId);
-  };
-  
-  const root = findRoot(req.params.id);
-  if (!root) return res.status(404).json({ error: 'Original not found' });
-  
-  // Collect all versions
-  const allVersions = [];
-  const collect = (songId) => {
-    const song = songs[songId];
-    if (song) {
-      allVersions.push({
-        id: song.id,
-        title: song.title,
-        creator: song.creator,
-        thumbnail: song.thumbnail,
-        trackCount: song.tracks?.length || 0,
-        likes: song.likes || 0,
-        bpm: song.bpm,
-        genre: song.genre,
-        createdAt: song.createdAt,
-        parentId: song.parentId,
-        isOwner: song.creator === req.user.username
-      });
-      if (song.children) {
-        song.children.forEach(childId => collect(childId));
-      }
-    }
-  };
-  
-  collect(root.id);
-  allVersions.sort((a, b) => b.createdAt - a.createdAt);
-  res.json({ original: root, versions: allVersions });
-});
-
-// ============ SONG ROUTES ============
+// ============ SONGS ============
 app.get('/api/songs', (req, res) => {
   const songs = readData(dataFiles.songs);
   const list = Object.values(songs).map(s => ({
     id: s.id, title: s.title, creator: s.creator,
-    thumbnail: s.thumbnail,
+    thumbnail: s.thumbnail || generateRandomThumbnail(s.title),
     bpm: s.bpm || 120, trackCount: s.tracks?.length || 0,
-    likes: s.likes || 0, childCount: s.children?.length || 0,
-    createdAt: s.createdAt, genre: s.genre || 'Electronic',
-    parentId: s.parentId
+    likes: s.likes || 0, createdAt: s.createdAt, genre: s.genre || 'Electronic'
   })).sort((a, b) => b.createdAt - a.createdAt);
   res.json(list);
 });
@@ -339,7 +260,6 @@ app.get('/api/songs/:id', (req, res) => {
   res.json(song);
 });
 
-// Create original song
 app.post('/api/songs', authenticateToken, (req, res) => {
   const { title, bpm = 120, genre = 'Electronic', thumbnail } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
@@ -352,8 +272,6 @@ app.post('/api/songs', authenticateToken, (req, res) => {
     createdAt: Date.now(),
     tracks: [], upvotes: 0, likes: 0, voters: [], comments: [],
     isPlaying: false, currentPosition: 0, duration: 0, isFeatured: false,
-    parentId: null,
-    children: [],
     fx: { reverb: false, delay: false, distortion: false, lowpass: false }
   };
   
@@ -369,70 +287,25 @@ app.post('/api/songs', authenticateToken, (req, res) => {
   res.json(newSong);
 });
 
-// Create child version (when user adds a track to a song they don't own)
-app.post('/api/songs/:id/version', authenticateToken, async (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const parentSong = songs[req.params.id];
-  if (!parentSong) return res.status(404).json({ error: 'Parent song not found' });
-  
-  const { title, audioFile } = req.body;
-  
-  const songId = uuidv4();
-  const newVersion = {
-    id: songId,
-    title: title || `${parentSong.title} (${req.user.username}'s version)`,
-    creator: req.user.username,
-    bpm: parentSong.bpm,
-    genre: parentSong.genre,
-    thumbnail: parentSong.thumbnail,
-    createdAt: Date.now(),
-    tracks: [],
-    upvotes: 0, likes: 0, voters: [], comments: [],
-    isPlaying: false, currentPosition: 0, duration: 0, isFeatured: false,
-    parentId: parentSong.id,
-    children: [],
-    fx: { reverb: false, delay: false, distortion: false, lowpass: false }
-  };
-  
-  songs[songId] = newVersion;
-  parentSong.children = [...(parentSong.children || []), songId];
-  writeData(dataFiles.songs, songs);
-  
-  const users = readData(dataFiles.users);
-  if (users[req.user.username]) {
-    users[req.user.username].contributedTo = [...(users[req.user.username].contributedTo || []), songId];
-    writeData(dataFiles.users, users);
-  }
-  
-  io.emit('song-created', newVersion);
-  res.json(newVersion);
-});
-
-// Add track to a version
 app.post('/api/songs/:id/track', authenticateToken, upload.single('audio'), (req, res) => {
   const songs = readData(dataFiles.songs);
-  let song = songs[req.params.id];
+  const song = songs[req.params.id];
   if (!song) return res.status(404).json({ error: 'Song not found' });
   
-  // Check if user already has a track in THIS version
   const userTrack = song.tracks?.find(t => t.username === req.user.username);
   if (userTrack) {
-    return res.status(400).json({ error: 'You already have a track in this version!' });
+    return res.status(400).json({ error: 'You already have a track in this song!' });
   }
-  if (!req.file) return res.status(400).json({ error: 'No audio' });
+  if (!req.file) return res.status(400).json({ error: 'No audio file' });
   
   const newTrack = {
     id: uuidv4(), username: req.user.username,
     audioUrl: '/uploads/tracks/' + req.file.filename,
     uploadedAt: Date.now(), volume: 0.8, muted: false, votes: 0, voters: {},
-    fx: {
-      reverb: false, delay: false, distortion: false, lowpass: false,
-      reverbAmount: 0.3, delayAmount: 0.3, distortionAmount: 0.3, lowpassFreq: 1000
-    }
+    fx: { reverb: false, delay: false, distortion: false, lowpass: false }
   };
   song.tracks = [...(song.tracks || []), newTrack];
   song.likes = song.tracks.reduce((sum, t) => sum + (t.votes || 0), 0);
-  
   writeData(dataFiles.songs, songs);
   
   const users = readData(dataFiles.users);
@@ -448,10 +321,19 @@ app.post('/api/songs/:id/thumbnail', authenticateToken, upload.single('thumbnail
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
   if (!song) return res.status(404).json({ error: 'Not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can change thumbnail' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can change thumbnail' });
   if (!req.file) return res.status(400).json({ error: 'No file' });
-  
   song.thumbnail = '/uploads/thumbnails/' + req.file.filename;
+  writeData(dataFiles.songs, songs);
+  res.json({ thumbnail: song.thumbnail });
+});
+
+app.put('/api/songs/:id/thumbnail-url', authenticateToken, (req, res) => {
+  const songs = readData(dataFiles.songs);
+  const song = songs[req.params.id];
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can change thumbnail' });
+  song.thumbnail = req.body.thumbnail;
   writeData(dataFiles.songs, songs);
   res.json({ thumbnail: song.thumbnail });
 });
@@ -459,48 +341,27 @@ app.post('/api/songs/:id/thumbnail', authenticateToken, upload.single('thumbnail
 app.put('/api/songs/:id/title', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Song not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can edit the song' });
-  
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can edit' });
   song.title = req.body.title;
   writeData(dataFiles.songs, songs);
   io.to(song.id).emit('song-updated', { songId: song.id, title: song.title });
   res.json({ title: song.title });
 });
 
-app.put('/api/songs/:id/thumbnail-url', authenticateToken, (req, res) => {
-  const songs = readData(dataFiles.songs);
-  const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Song not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can change thumbnail' });
-  
-  song.thumbnail = req.body.thumbnail;
-  writeData(dataFiles.songs, songs);
-  io.to(song.id).emit('song-updated', { songId: song.id, thumbnail: song.thumbnail });
-  res.json({ thumbnail: song.thumbnail });
-});
-
 app.delete('/api/songs/:id', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
-  if (!song) return res.status(404).json({ error: 'Song not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only the creator can delete the song' });
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can delete' });
   
-  // Remove from parent's children list
-  if (song.parentId && songs[song.parentId]) {
-    songs[song.parentId].children = songs[song.parentId].children?.filter(c => c !== req.params.id) || [];
-  }
-  
-  // Remove from user's contributedTo
   const users = readData(dataFiles.users);
   if (users[req.user.username]) {
     users[req.user.username].contributedTo = users[req.user.username].contributedTo?.filter(id => id !== req.params.id) || [];
     writeData(dataFiles.users, users);
   }
-  
   delete songs[req.params.id];
   writeData(dataFiles.songs, songs);
-  
   io.emit('song-deleted', { songId: req.params.id });
   res.json({ success: true });
 });
@@ -564,8 +425,7 @@ app.put('/api/songs/:id/bpm', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.id];
   if (!song) return res.status(404).json({ error: 'Not found' });
-  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only version owner can change BPM' });
-  
+  if (song.creator !== req.user.username) return res.status(403).json({ error: 'Only creator can change BPM' });
   song.bpm = req.body.bpm;
   writeData(dataFiles.songs, songs);
   io.to(song.id).emit('bpm-changed', { bpm: song.bpm });
@@ -608,26 +468,20 @@ app.post('/api/comments/:commentId/like', authenticateToken, (req, res) => {
   res.json({ likes: comment.likes, liked: !wasLiked });
 });
 
-// ============ FEED ROUTES ============
+// ============ FEED ============
 app.get('/api/feed', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const users = readData(dataFiles.users);
-  const currentUsername = req.user.username;
   
   const activityFeed = Object.values(songs)
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 20)
     .map(song => ({
-      id: song.id,
-      title: song.title,
-      creator: song.creator,
+      id: song.id, title: song.title, creator: song.creator,
       creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
       thumbnail: song.thumbnail,
-      type: song.parentId ? 'version' : 'original',
-      parentId: song.parentId,
       trackCount: song.tracks?.length || 0,
       likes: song.likes || 0,
-      childCount: song.children?.length || 0,
       createdAt: song.createdAt
     }));
   
@@ -635,24 +489,20 @@ app.get('/api/feed', authenticateToken, (req, res) => {
     .sort((a, b) => b.likes - a.likes)
     .slice(0, 10)
     .map(song => ({
-      id: song.id,
-      title: song.title,
-      creator: song.creator,
+      id: song.id, title: song.title, creator: song.creator,
       creatorAvatar: users[song.creator]?.avatar || generateRandomAvatar(song.creator),
       thumbnail: song.thumbnail,
       trackCount: song.tracks?.length || 0,
-      likes: song.likes || 0,
-      childCount: song.children?.length || 0
+      likes: song.likes || 0
     }));
   
   const topContributors = Object.values(users)
-    .filter(u => u.username !== currentUsername)
+    .filter(u => u.username !== req.user.username)
     .map(u => ({
-      username: u.username,
-      avatar: u.avatar,
+      username: u.username, avatar: u.avatar,
       trackCount: u.contributedTo?.length || 0,
       followersCount: u.followers?.length || 0,
-      isFollowing: (u.followers || []).includes(currentUsername)
+      isFollowing: (u.followers || []).includes(req.user.username)
     }))
     .sort((a, b) => b.trackCount - a.trackCount)
     .slice(0, 10);
@@ -660,7 +510,7 @@ app.get('/api/feed', authenticateToken, (req, res) => {
   res.json({ activityFeed, trendingSongs, topContributors });
 });
 
-// ============ FX ROUTES ============
+// ============ FX ============
 app.post('/api/songs/:songId/track/:trackId/fx', authenticateToken, (req, res) => {
   const songs = readData(dataFiles.songs);
   const song = songs[req.params.songId];
