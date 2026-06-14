@@ -83,8 +83,8 @@
       <div id="song-list" class="song-grid"><div class="loading">Loading tracks...</div></div>
     </div>
 
-    <!-- Studio View -->
-    <div id="studio-view" class="studio-view">
+    <!-- Studio View - Hidden by default, only shows when song selected -->
+    <div id="studio-view" class="studio-view" style="display: none;">
       <div class="studio-header">
         <div>
           <h2 id="current-song-title">Select a track</h2>
@@ -122,20 +122,6 @@
         <div class="comment-input-area">
           <input type="text" id="comment-input" placeholder="Add a comment...">
           <button id="post-comment">Post</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Versions Modal -->
-    <div id="versions-modal" class="modal-overlay">
-      <div class="modal-card versions-modal-card">
-        <div class="modal-header">
-          <h3>🌳 Version Tree</h3>
-          <button class="close-versions-modal">&times;</button>
-        </div>
-        <div id="version-tree" class="version-tree"></div>
-        <div class="modal-buttons">
-          <button id="close-versions" class="cancel-btn">Close</button>
         </div>
       </div>
     </div>
@@ -239,13 +225,26 @@
       </div>
     </div>
 
+    <!-- Versions Modal -->
+    <div id="versions-modal" class="modal-overlay">
+      <div class="modal-card versions-modal-card">
+        <div class="modal-header">
+          <h3>🌳 Version Tree</h3>
+          <button class="close-versions-modal">&times;</button>
+        </div>
+        <div id="version-tree" class="version-tree"></div>
+        <div class="modal-buttons">
+          <button id="close-versions" class="cancel-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Tutorial Overlay -->
     <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
       <div class="tutorial-card">
         <h2>🎵 Welcome to TrackStars!</h2>
         <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create a Track</strong><br>Start by creating your own original track.</p></div>
         <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Add Your Sound</strong><br>Record or upload your audio to a track.</p></div>
-        <div class="tutorial-step"><div class="tutorial-icon">🔀</div><p><strong>Version Control</strong><br>When you add to someone else's track, it creates a new version!</p></div>
         <div class="tutorial-step"><div class="tutorial-icon">🌳</div><p><strong>Version Tree</strong><br>See all versions and how they connect to the original.</p></div>
         <div class="checkbox-row">
           <label class="checkbox-label">
