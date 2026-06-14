@@ -83,6 +83,13 @@
             <div id="song-list" class="song-grid"><div class="loading">Loading your tracks...</div></div>
         </div>
 
+        <!-- Profile View -->
+        <div id="profile-view" class="view">
+            <div id="profile-content" class="profile-content">
+                <div class="loading">Loading profile...</div>
+            </div>
+        </div>
+
         <!-- Studio View -->
         <div id="studio-view" class="studio-view" style="display: none;">
             <div class="studio-header">
@@ -113,7 +120,7 @@
                 <div id="recording-status" class="status"></div>
                 <div id="upload-progress" class="upload-progress" style="display:none;">
                     <div class="progress-bar-container">
-                        <div class="upload-progress-fill" id="upload-progress-fill"></div>
+                        <div id="upload-progress-fill" class="upload-progress-fill"></div>
                     </div>
                     <div id="upload-status-text" class="upload-status-text">Uploading track...</div>
                 </div>
@@ -149,9 +156,15 @@
                 </div>
                 <div id="chat-recent" class="chat-recent"><div class="loading">Loading chats...</div></div>
                 <div id="chat-conversation" class="chat-conversation" style="display: none">
-                    <div class="conv-header"><button id="back-to-recent">← Back</button><span id="chat-with"></span></div>
+                    <div class="conv-header">
+                        <button id="back-to-recent">← Back</button>
+                        <span id="chat-with"></span>
+                    </div>
                     <div id="chat-messages" class="chat-messages"></div>
-                    <div class="chat-input"><input type="text" id="chat-input" placeholder="Type a message..."><button id="send-chat">Send</button></div>
+                    <div class="chat-input">
+                        <input type="text" id="chat-input" placeholder="Type a message...">
+                        <button id="send-chat">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -206,10 +219,22 @@
     <div id="profile-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header"><h3>Edit Profile</h3><button class="close-modal">✕</button></div>
-            <div class="avatar-section"><img id="edit-avatar"><button id="change-avatar">Change Avatar</button><input type="file" id="avatar-file" accept="image/*" style="display:none"></div>
+            <div class="avatar-section">
+                <img id="edit-avatar">
+                <button id="change-avatar">Change Avatar</button>
+                <input type="file" id="avatar-file" accept="image/*" style="display:none">
+            </div>
             <textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..."></textarea>
-            <div class="stats-row"><div><span id="edit-followers"></span><label>Followers</label></div><div><span id="edit-following"></span><label>Following</label></div><div><span id="edit-tracks"></span><label>Total Tracks</label></div></div>
-            <div class="checkbox-row"><label class="checkbox-label"><input type="checkbox" id="disable-tutorial">Disable Tutorial</label></div>
+            <div class="stats-row">
+                <div><span id="edit-followers"></span><label>Followers</label></div>
+                <div><span id="edit-following"></span><label>Following</label></div>
+                <div><span id="edit-tracks"></span><label>Total Tracks</label></div>
+            </div>
+            <div class="checkbox-row">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="disable-tutorial">Disable Tutorial
+                </label>
+            </div>
             <button id="save-profile">Save Changes</button>
         </div>
     </div>
