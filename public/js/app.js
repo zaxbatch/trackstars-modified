@@ -1227,7 +1227,7 @@
         }
     }
 
-    // Chat Functions - FIXED
+    // Chat Functions - COMPLETELY FIXED
     window.startChat = async function(username) {
         console.log('Starting chat with:', username);
         currentChatUser = username;
@@ -1245,48 +1245,97 @@
     async function loadRecentChats() {
         const container = document.getElementById('chat-recent');
         if (!container) return;
+        
+        container.innerHTML = '<div class="loading">Loading users...</div>';
+        
         try {
+            const allUsers = await api.searchUsers('');
+            console.log('All users:', allUsers);
+            
             const chats = await api.getRecentChats();
             console.log('Recent chats:', chats);
-            if (!chats || chats.length === 0) {
-                container.innerHTML = '<div class="loading">💬 No recent chats. Search for users above!</div>';
-                return;
+            
+            const usersWithChats = new Set();
+            if (chats && chats.length > 0) {
+                chats.forEach(chat => {
+                    if (chat.otherUser) usersWithChats.add(chat.otherUser);
+                });
             }
+            
             let html = '';
-            for (let i = 0; i < chats.length; i++) {
-                let c = chats[i];
-                html += `<div class="chat-user-item" onclick="window.startChat('${escape(c.otherUser)}')">`;
-                html += `<img src="${escape(c.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(c.otherUser)}'">`;
-                html += `<div class="chat-user-info">`;
-                html += `<div class="chat-user-name">${escape(c.otherUser)}</div>`;
-                html += `<div class="chat-preview">${escape(c.text.substring(0, 40))}</div>`;
-                html += `</div>`;
-                html += `<div class="chat-time">${new Date(c.timestamp).toLocaleTimeString()}</div>`;
-                html += `</div>`;
+            
+            if (chats && chats.length > 0) {
+                html += '<div class="chat-section-title">💬 Recent Conversations</div>';
+                for (let i = 0; i < chats.length; i++) {
+                    let c = chats[i];
+                    html += `<div class="chat-user-item" onclick="window.startChat('${escape(c.otherUser)}')">`;
+                    html += `<img src="${escape(c.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(c.otherUser)}'">`;
+                    html += `<div class="chat-user-info">`;
+                    html += `<div class="chat-user-name">${escape(c.otherUser)}</div>`;
+                    html += `<div class="chat-preview">${escape(c.text.substring(0, 40))}</div>`;
+                    html += `</div>`;
+                    html += `<div class="chat-time">${new Date(c.timestamp).toLocaleTimeString()}</div>`;
+                    html += `</div>`;
+                }
             }
-            container.innerHTML = html;
+            
+            if (allUsers && allUsers.length > 0) {
+                if (html) html += '<div class="chat-section-title" style="margin-top: 16px;">👥 All Users</div>';
+                else html += '<div class="chat-section-title">👥 All Users</div>';
+                
+                for (let i = 0; i < allUsers.length; i++) {
+                    let u = allUsers[i];
+                    if (usersWithChats.has(u.username)) continue;
+                    
+                    html += `<div class="chat-user-item" onclick="window.startChat('${escape(u.username)}')">`;
+                    html += `<img src="${escape(u.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(u.username)}'">`;
+                    html += `<div class="chat-user-info">`;
+                    html += `<div class="chat-user-name">${escape(u.username)}</div>`;
+                    html += `<div class="chat-preview">👥 ${u.followersCount} followers</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                }
+            }
+            
+            if (!html) {
+                container.innerHTML = '<div class="loading">💬 No users found. Check back later!</div>';
+            } else {
+                container.innerHTML = html;
+            }
         } catch(e) {
             console.error('Error loading chats:', e);
-            container.innerHTML = '<div class="loading">Error loading chats</div>';
+            container.innerHTML = '<div class="loading">Error loading users. Please refresh the page.</div>';
         }
         
-        // Setup search functionality
         const searchInput = document.getElementById('chat-search-input');
         if (searchInput) {
-            searchInput.oninput = async function() {
-                const term = searchInput.value.trim();
+            const newSearchInput = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+            
+            newSearchInput.oninput = async function() {
+                const term = this.value.trim();
+                console.log('Searching for:', term);
+                
+                const container = document.getElementById('chat-recent');
+                if (!container) return;
+                
                 if (!term) {
                     loadRecentChats();
                     return;
                 }
+                
+                container.innerHTML = '<div class="loading">Searching...</div>';
+                
                 try {
                     const users = await api.searchUsers(term);
                     console.log('Search results:', users);
+                    
                     if (!users || users.length === 0) {
-                        container.innerHTML = '<div class="loading">No users found</div>';
+                        container.innerHTML = '<div class="loading">No users found matching "' + escape(term) + '"</div>';
                         return;
                     }
-                    let html = '';
+                    
+                    let html = '<div class="chat-section-title">🔍 Search Results for "' + escape(term) + '"</div>';
                     for (let i = 0; i < users.length; i++) {
                         let u = users[i];
                         html += `<div class="chat-user-item" onclick="window.startChat('${escape(u.username)}')">`;
@@ -1300,7 +1349,7 @@
                     container.innerHTML = html;
                 } catch(e) {
                     console.error('Error searching users:', e);
-                    container.innerHTML = '<div class="loading">Error searching</div>';
+                    container.innerHTML = '<div class="loading">Error searching. Please try again.</div>';
                 }
             };
         }
@@ -1837,7 +1886,6 @@
         if (initialized) return;
         initialized = true;
         
-        // Auth tabs
         const authTabs = document.querySelectorAll('.auth-tab');
         for (let i = 0; i < authTabs.length; i++) {
             authTabs[i].onclick = function() {
@@ -1855,7 +1903,6 @@
             };
         }
         
-        // Login form
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             loginForm.onsubmit = async function(e) {
@@ -1878,7 +1925,6 @@
             };
         }
         
-        // Register form
         const registerForm = document.getElementById('register-form');
         if (registerForm) {
             registerForm.onsubmit = async function(e) {
@@ -1903,17 +1949,14 @@
             };
         }
         
-        // Logout
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) logoutBtn.onclick = logout;
         
-        // Profile click
         const headerAvatar = document.getElementById('header-avatar');
         if (headerAvatar) headerAvatar.onclick = openProfileModal;
         const usernameSpan = document.querySelector('.username');
         if (usernameSpan) usernameSpan.onclick = openProfileModal;
         
-        // Close modals
         const closeModal = document.querySelector('.close-modal');
         if (closeModal) closeModal.onclick = function() {
             document.getElementById('profile-modal').style.display = 'none';
@@ -1927,11 +1970,9 @@
         const closeEditModal = document.querySelector('.close-edit-modal');
         if (closeEditModal) closeEditModal.onclick = closeEditSongModal;
         
-        // Save profile
         const saveProfileBtn = document.getElementById('save-profile');
         if (saveProfileBtn) saveProfileBtn.onclick = saveProfile;
         
-        // Change avatar
         const changeAvatarBtn = document.getElementById('change-avatar');
         if (changeAvatarBtn) {
             changeAvatarBtn.onclick = function() {
@@ -1946,7 +1987,6 @@
             };
         }
         
-        // Create modal
         const openCreateModal = document.getElementById('open-create-modal');
         if (openCreateModal) {
             openCreateModal.onclick = function() {
@@ -1963,11 +2003,9 @@
             document.getElementById('create-modal').style.display = 'none';
         };
         
-        // Random thumb
         const randomThumb = document.getElementById('random-thumb');
         if (randomThumb) randomThumb.onclick = randomizeThumbPreview;
         
-        // Upload thumb
         const uploadThumbBtn = document.getElementById('upload-thumb-btn');
         if (uploadThumbBtn) {
             uploadThumbBtn.onclick = function() {
@@ -1989,7 +2027,6 @@
             };
         }
         
-        // Transport controls
         const playBtn = document.getElementById('play-btn');
         if (playBtn) playBtn.onclick = function() {
             isPlaying ? pausePlayback() : startPlayback(false);
@@ -2001,7 +2038,6 @@
         const bpmInput = document.getElementById('bpm-input');
         if (bpmInput) bpmInput.onchange = updateBpm;
         
-        // Recording
         const recordBtn = document.getElementById('record-btn');
         if (recordBtn) recordBtn.onclick = startRecordingWithPlayback;
         
@@ -2016,7 +2052,6 @@
         const audioFile = document.getElementById('audio-file');
         if (audioFile) audioFile.onchange = uploadTrackFile;
         
-        // Metronome toggle
         const metronomeToggle = document.getElementById('metronome-toggle');
         if (metronomeToggle) {
             const savedMetronome = localStorage.getItem('metronomeEnabled');
@@ -2032,11 +2067,9 @@
             };
         }
         
-        // Back button
         const backBtn = document.getElementById('back-btn');
         if (backBtn) backBtn.onclick = backToLibrary;
         
-        // Comments
         const postCommentBtn = document.getElementById('post-comment');
         if (postCommentBtn) postCommentBtn.onclick = postComment;
         
@@ -2047,7 +2080,6 @@
             };
         }
         
-        // Chat
         const backToRecentBtn = document.getElementById('back-to-recent');
         if (backToRecentBtn) backToRecentBtn.onclick = backToRecent;
         
@@ -2061,7 +2093,6 @@
             };
         }
         
-        // Edit song modal
         const saveSongChangesBtn = document.getElementById('save-song-changes');
         if (saveSongChangesBtn) saveSongChangesBtn.onclick = saveSongChanges;
         
@@ -2092,7 +2123,6 @@
             };
         }
         
-        // Modal close on overlay click
         const modals = ['create-modal', 'edit-song-modal', 'profile-modal', 'user-modal', 'export-modal'];
         for (let i = 0; i < modals.length; i++) {
             const modal = document.getElementById(modals[i]);
@@ -2103,7 +2133,6 @@
             }
         }
         
-        // Check for existing session
         const savedToken = localStorage.getItem('token');
         const savedUser = localStorage.getItem('user');
         if (savedToken && savedUser) {

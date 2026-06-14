@@ -32,6 +32,7 @@ const dataFiles = {
     messages: './data/messages.json'
 };
 
+// Initialize data files if they don't exist
 if (!fs.existsSync(dataFiles.users)) fs.writeFileSync(dataFiles.users, JSON.stringify({}));
 if (!fs.existsSync(dataFiles.songs)) fs.writeFileSync(dataFiles.songs, JSON.stringify({}));
 if (!fs.existsSync(dataFiles.messages)) fs.writeFileSync(dataFiles.messages, JSON.stringify({}));
@@ -164,23 +165,41 @@ app.get('/api/users', authenticateToken, (req, res) => {
     const current = users[req.user.username];
     const userList = [];
     for (const u in users) {
-        userList.push({
-            username: u,
-            avatar: users[u].avatar || generateRandomAvatar(u),
-            followersCount: users[u].followers?.length || 0,
-            isFollowing: current?.following?.includes(u) || false
-        });
+        if (u !== req.user.username) {
+            userList.push({
+                username: u,
+                avatar: users[u].avatar || generateRandomAvatar(u),
+                followersCount: users[u].followers?.length || 0,
+                isFollowing: current?.following?.includes(u) || false
+            });
+        }
     }
     res.json(userList);
 });
 
+// FIXED: Search endpoint - returns ALL users except current user, filtered by search term
 app.get('/api/users/search', authenticateToken, (req, res) => {
     const { q } = req.query;
     const users = readData(dataFiles.users);
     const current = users[req.user.username];
     const results = [];
+    
     for (const u in users) {
-        if (u !== req.user.username && (!q || u.toLowerCase().includes(q.toLowerCase()))) {
+        // Skip the current user
+        if (u === req.user.username) continue;
+        
+        // If search query exists, filter by it
+        if (q && q.trim() !== '') {
+            if (u.toLowerCase().includes(q.toLowerCase())) {
+                results.push({
+                    username: u,
+                    avatar: users[u].avatar || generateRandomAvatar(u),
+                    followersCount: users[u].followers?.length || 0,
+                    isFollowing: current?.following?.includes(u) || false
+                });
+            }
+        } else {
+            // If no search query, return all users
             results.push({
                 username: u,
                 avatar: users[u].avatar || generateRandomAvatar(u),
@@ -189,6 +208,9 @@ app.get('/api/users/search', authenticateToken, (req, res) => {
             });
         }
     }
+    
+    // Sort by username
+    results.sort((a, b) => a.username.localeCompare(b.username));
     res.json(results);
 });
 
@@ -264,7 +286,7 @@ app.post('/api/messages', authenticateToken, (req, res) => {
     const msg = { id: uuidv4(), from: req.user.username, to, text, timestamp: Date.now() };
     messages[convId].push(msg);
     writeData(dataFiles.messages, messages);
-    io.to(to).emit('new-message', msg);
+    io.to(`chat-${to}`).emit('new-message', msg);
     res.json(msg);
 });
 
@@ -677,6 +699,7 @@ io.on('connection', (socket) => {
     
     socket.on('join-chat', (userId) => {
         socket.join(`chat-${userId}`);
+        console.log(`User ${userId} joined chat room`);
     });
     
     socket.on('disconnect', () => {
