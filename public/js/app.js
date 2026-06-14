@@ -102,7 +102,7 @@
             if (!res.ok) throw new Error('Upload failed');
             return res.json();
         },
-        getMessages: (u) => api.request('/api/messages/' + u),
+        getMessages: (username) => api.request('/api/messages/' + username),
         getRecentChats: () => api.request('/api/messages/recent'),
         sendMessage: (to, text) => api.request('/api/messages', { method: 'POST', body: JSON.stringify({ to, text }) }),
         searchUsers: (q) => api.request('/api/users/search?q=' + encodeURIComponent(q)),
@@ -565,7 +565,7 @@
             html += '</div>';
             if (isOwnerFlag) {
                 html += '<div class="song-actions" onclick="event.stopPropagation()">';
-                html += '<button class="edit-song-btn" onclick="window.openEditSongModal(\'' + s.id + '\', event)">✏️</button>';
+                html += '<button class="edit-song-btn" onclick="window.openEditSongModal(\'' + s.id + '\', event)">✏️ Edit</button>';
                 html += '</div>';
             }
             html += '</div>';
@@ -1227,12 +1227,18 @@
         }
     }
 
-    // Chat Functions
+    // Chat Functions - FIXED
     window.startChat = async function(username) {
+        console.log('Starting chat with:', username);
         currentChatUser = username;
-        document.getElementById('chat-with').textContent = username;
-        document.getElementById('chat-recent').style.display = 'none';
-        document.getElementById('chat-conversation').style.display = 'flex';
+        const chatWithSpan = document.getElementById('chat-with');
+        if (chatWithSpan) chatWithSpan.textContent = username;
+        
+        const chatRecent = document.getElementById('chat-recent');
+        const chatConversation = document.getElementById('chat-conversation');
+        if (chatRecent) chatRecent.style.display = 'none';
+        if (chatConversation) chatConversation.style.display = 'flex';
+        
         await loadConversation(username);
     };
 
@@ -1241,48 +1247,59 @@
         if (!container) return;
         try {
             const chats = await api.getRecentChats();
-            if (chats.length === 0) {
-                container.innerHTML = '<div class="loading">No recent chats. Search for users above!</div>';
+            console.log('Recent chats:', chats);
+            if (!chats || chats.length === 0) {
+                container.innerHTML = '<div class="loading">💬 No recent chats. Search for users above!</div>';
                 return;
             }
             let html = '';
             for (let i = 0; i < chats.length; i++) {
                 let c = chats[i];
-                html += '<div class="chat-user-item" onclick="window.startChat(\'' + escape(c.otherUser) + '\')">';
-                html += '<img src="' + escape(c.avatar) + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(c.otherUser) + '\'">';
-                html += '<div class="chat-user-info"><div class="chat-user-name">' + escape(c.otherUser) + '</div>';
-                html += '<div class="chat-preview">' + escape(c.text.substring(0, 30)) + '</div></div>';
-                html += '<div class="chat-time">' + new Date(c.timestamp).toLocaleTimeString() + '</div></div>';
+                html += `<div class="chat-user-item" onclick="window.startChat('${escape(c.otherUser)}')">`;
+                html += `<img src="${escape(c.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(c.otherUser)}'">`;
+                html += `<div class="chat-user-info">`;
+                html += `<div class="chat-user-name">${escape(c.otherUser)}</div>`;
+                html += `<div class="chat-preview">${escape(c.text.substring(0, 40))}</div>`;
+                html += `</div>`;
+                html += `<div class="chat-time">${new Date(c.timestamp).toLocaleTimeString()}</div>`;
+                html += `</div>`;
             }
             container.innerHTML = html;
         } catch(e) {
+            console.error('Error loading chats:', e);
             container.innerHTML = '<div class="loading">Error loading chats</div>';
         }
         
+        // Setup search functionality
         const searchInput = document.getElementById('chat-search-input');
         if (searchInput) {
             searchInput.oninput = async function() {
-                const term = searchInput.value;
+                const term = searchInput.value.trim();
                 if (!term) {
                     loadRecentChats();
                     return;
                 }
                 try {
                     const users = await api.searchUsers(term);
-                    if (users.length === 0) {
+                    console.log('Search results:', users);
+                    if (!users || users.length === 0) {
                         container.innerHTML = '<div class="loading">No users found</div>';
                         return;
                     }
                     let html = '';
                     for (let i = 0; i < users.length; i++) {
                         let u = users[i];
-                        html += '<div class="chat-user-item" onclick="window.startChat(\'' + escape(u.username) + '\')">';
-                        html += '<img src="' + escape(u.avatar) + '" onerror="this.src=\'https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=' + encodeURIComponent(u.username) + '\'">';
-                        html += '<div class="chat-user-info"><div class="chat-user-name">' + escape(u.username) + '</div>';
-                        html += '<div class="chat-preview">' + u.followersCount + ' followers</div></div></div>';
+                        html += `<div class="chat-user-item" onclick="window.startChat('${escape(u.username)}')">`;
+                        html += `<img src="${escape(u.avatar)}" onerror="this.src='https://ui-avatars.com/api/?background=667eea&color=fff&size=200&name=${encodeURIComponent(u.username)}'">`;
+                        html += `<div class="chat-user-info">`;
+                        html += `<div class="chat-user-name">${escape(u.username)}</div>`;
+                        html += `<div class="chat-preview">👥 ${u.followersCount} followers</div>`;
+                        html += `</div>`;
+                        html += `</div>`;
                     }
                     container.innerHTML = html;
                 } catch(e) {
+                    console.error('Error searching users:', e);
                     container.innerHTML = '<div class="loading">Error searching</div>';
                 }
             };
@@ -1291,20 +1308,32 @@
 
     async function loadConversation(username) {
         try {
+            console.log('Loading conversation with:', username);
             const msgs = await api.getMessages(username);
+            console.log('Messages:', msgs);
             const container = document.getElementById('chat-messages');
             if (!container) return;
+            
+            if (!msgs || msgs.length === 0) {
+                container.innerHTML = '<div class="empty-state-small">💬 No messages yet. Send a message to start the conversation!</div>';
+                return;
+            }
+            
             let html = '';
             for (let i = 0; i < msgs.length; i++) {
                 let m = msgs[i];
-                html += '<div class="message ' + (m.from === currentUser.username ? 'message-sent' : 'message-received') + '">';
-                html += '<div>' + escape(m.text) + '</div>';
-                html += '<div class="message-time">' + new Date(m.timestamp).toLocaleTimeString() + '</div></div>';
+                const isSent = m.from === currentUser.username;
+                html += `<div class="message ${isSent ? 'message-sent' : 'message-received'}">`;
+                html += `<div>${escape(m.text)}</div>`;
+                html += `<div class="message-time">${new Date(m.timestamp).toLocaleTimeString()}</div>`;
+                html += `</div>`;
             }
             container.innerHTML = html;
             container.scrollTop = container.scrollHeight;
         } catch(e) {
-            console.error(e);
+            console.error('Error loading conversation:', e);
+            const container = document.getElementById('chat-messages');
+            if (container) container.innerHTML = '<div class="loading">Error loading messages</div>';
         }
     }
 
@@ -1313,19 +1342,24 @@
         if (!input) return;
         const text = input.value.trim();
         if (!text || !currentChatUser) return;
+        
+        console.log('Sending message to:', currentChatUser, 'text:', text);
         try {
             await api.sendMessage(currentChatUser, text);
             input.value = "";
             await loadConversation(currentChatUser);
             loadRecentChats();
         } catch(e) {
+            console.error('Error sending message:', e);
             showToast('Error sending message');
         }
     }
 
     function backToRecent() {
-        document.getElementById('chat-conversation').style.display = 'none';
-        document.getElementById('chat-recent').style.display = 'block';
+        const chatConversation = document.getElementById('chat-conversation');
+        const chatRecent = document.getElementById('chat-recent');
+        if (chatConversation) chatConversation.style.display = 'none';
+        if (chatRecent) chatRecent.style.display = 'block';
         currentChatUser = null;
         loadRecentChats();
     }
@@ -1650,8 +1684,11 @@
         });
         
         socket.on('new-message', function(msg) {
-            if (currentChatUser === msg.from) loadConversation(msg.from);
-            showToast('New message from ' + msg.from);
+            console.log('New message received:', msg);
+            if (currentChatUser === msg.from) {
+                loadConversation(msg.from);
+            }
+            showToast('📨 New message from ' + msg.from);
             loadRecentChats();
         });
         
