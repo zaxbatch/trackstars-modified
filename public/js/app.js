@@ -41,7 +41,11 @@
             const fd = new FormData();
             fd.append('thumbnail', file);
             const tk = getToken();
-            const res = await fetch('/api/songs/' + id + '/thumbnail', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tk } }, body: fd });
+            const res = await fetch('/api/songs/' + id + '/thumbnail', { 
+                method: 'POST', 
+                headers: { 'Authorization': 'Bearer ' + tk },
+                body: fd 
+            });
             if (!res.ok) throw new Error('Upload failed');
             return res.json();
         },
@@ -90,7 +94,11 @@
             const fd = new FormData();
             fd.append('avatar', file);
             const tk = getToken();
-            const res = await fetch('/api/upload-avatar', { method: 'POST', headers: {'Authorization': 'Bearer ' + tk}, body: fd });
+            const res = await fetch('/api/upload-avatar', { 
+                method: 'POST', 
+                headers: { 'Authorization': 'Bearer ' + tk },
+                body: fd 
+            });
             if (!res.ok) throw new Error('Upload failed');
             return res.json();
         },
@@ -1568,7 +1576,7 @@
         view.setUint32(24, sampleRate, true);
         view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
         view.setUint16(32, numChannels * (bitDepth / 8), true);
-        view.setUint32(34, bitDepth, true);
+        view.setUint16(34, bitDepth, true);
         writeString(view, 36, 'data');
         view.setUint32(40, dataLength, true);
         
