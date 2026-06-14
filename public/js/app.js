@@ -31,16 +31,19 @@
         getSongs: () => api.request('/api/songs'),
         getSong: (id) => api.request('/api/songs/' + id),
         createSong: (data) => api.request('/api/songs', { method: 'POST', body: JSON.stringify(data) }),
+        createVersion: (id, data) => api.request('/api/songs/' + id + '/version', { method: 'POST', body: JSON.stringify(data) }),
+        getVersionTree: (id) => api.request('/api/songs/' + id + '/version-tree'),
+        getAllVersions: (id) => api.request('/api/songs/' + id + '/all-versions'),
         editSongTitle: (id, title) => api.request('/api/songs/' + id + '/title', { method: 'PUT', body: JSON.stringify({ title }) }),
         editSongThumbnail: async (id, file) => {
             const fd = new FormData();
             fd.append('thumbnail', file);
             const tk = getToken();
-            const res = await fetch('/api/songs/' + id + '/thumbnail', { method: 'PUT', headers: { 'Authorization': 'Bearer ' + tk }, body: fd });
+            const res = await fetch('/api/songs/' + id + '/thumbnail', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tk }, body: fd });
             if (!res.ok) throw new Error('Upload failed');
             return res.json();
         },
-        editSongThumbnailUrl: (id, url) => api.request('/api/songs/' + id + '/thumbnail', { method: 'PUT', body: JSON.stringify({ thumbnail: url }) }),
+        editSongThumbnailUrl: (id, url) => api.request('/api/songs/' + id + '/thumbnail-url', { method: 'PUT', body: JSON.stringify({ thumbnail: url }) }),
         deleteSong: (id) => api.request('/api/songs/' + id, { method: 'DELETE' }),
         uploadTrack: async (id, file) => {
             const fd = new FormData();
@@ -53,9 +56,10 @@
         updateBpm: (id, bpmVal) => api.request('/api/songs/' + id + '/bpm', { method: 'PUT', body: JSON.stringify({ bpm: bpmVal }) }),
         deleteTrack: (sid, tid) => api.request('/api/songs/' + sid + '/track/' + tid, { method: 'DELETE' }),
         voteTrack: (sid, tid, v) => api.request('/api/songs/' + sid + '/track/' + tid + '/vote', { method: 'POST', body: JSON.stringify({ vote: v }) }),
+        updateTrackFx: (sid, tid, fx) => api.request('/api/songs/' + sid + '/track/' + tid + '/fx', { method: 'POST', body: JSON.stringify({ fx }) }),
         followUser: (u) => api.request('/api/users/' + u + '/follow', { method: 'POST' }),
         updateBio: (bio) => api.request('/api/users/bio', { method: 'PUT', body: JSON.stringify({ bio }) }),
-        updateTutorial: () => api.request('/api/users/tutorial', { method: 'PUT' }).catch(() => ({ success: true })),
+        updateTutorial: (completed) => api.request('/api/users/tutorial', { method: 'PUT', body: JSON.stringify({ completed }) }),
         uploadAvatar: async (file) => {
             const fd = new FormData();
             fd.append('avatar', file);
@@ -145,9 +149,12 @@
         if (recordMode === undefined) recordMode = false;
         if (!currentSong) return false;
         await initAudio();
-        if (recordMode && currentSong.tracks.some(t => t.username === currentUser.username)) { 
-            showToast('You already have a track! Fork it to add another.'); 
-            return false; 
+        if (recordMode) {
+            const userTrack = currentSong.tracks.some(t => t.username === currentUser.username);
+            if (userTrack) {
+                showToast('You already have a track in this version! Click "Create Version" to make your own version.');
+                return false;
+            }
         }
         await loadTracks();
         if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -202,10 +209,10 @@
                 if (statusDiv) statusDiv.innerHTML = '📤 Uploading...';
                 try {
                     await api.uploadTrack(currentSong.id, file);
-                    showToast('Recording uploaded!');
+                    showToast('Track added to version!');
                     currentSong = await api.getSong(currentSong.id);
                     displayTracks();
-                    if (statusDiv) statusDiv.innerHTML = '✅ Saved!';
+                    if (statusDiv) statusDiv.innerHTML = '✅ Added!';
                     const recBtn = document.getElementById('record-btn');
                     const upBtn = document.getElementById('upload-btn');
                     if (recBtn) recBtn.disabled = true;
@@ -241,12 +248,53 @@
     async function startRecordingWithPlayback() {
         if (!currentSong) return showToast('Select a song first');
         if (isRecording) return showToast('Already recording');
-        if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track! Fork this song to add another.');
+        const userTrack = currentSong.tracks.some(t => t.username === currentUser.username);
+        if (userTrack) {
+            const createVersion = confirm('You already have a track in this version. Create a new version with your track?');
+            if (createVersion) {
+                await createNewVersion();
+            }
+            return;
+        }
         if (isPlaying) stopPlayback();
         currentPos = 0;
         updateDisplay(0);
         await new Promise(r => setTimeout(r, 100));
         await startPlayback(true);
+    }
+
+    async function createNewVersion() {
+        try {
+            const newTitle = prompt('Enter a title for your version:', currentSong.title + ' (' + currentUser.username + '\'s version)');
+            if (!newTitle) return;
+            const newVersion = await api.createVersion(currentSong.id, { title: newTitle });
+            showToast('New version created! Select it to add your track.');
+            await selectSong(newVersion.id);
+        } catch(e) { showToast('Error creating version'); }
+    }
+
+    async function uploadTrackFile() {
+        const file = document.getElementById('audio-file').files[0];
+        if (!file) return showToast('Select a file');
+        const userTrack = currentSong.tracks.some(t => t.username === currentUser.username);
+        if (userTrack) {
+            const createVersion = confirm('You already have a track in this version. Create a new version with your track?');
+            if (createVersion) {
+                await createNewVersion();
+            }
+            return;
+        }
+        try {
+            await api.uploadTrack(currentSong.id, file);
+            showToast('Track added to version!');
+            currentSong = await api.getSong(currentSong.id);
+            displayTracks();
+            const recBtn = document.getElementById('record-btn');
+            const upBtn = document.getElementById('upload-btn');
+            if (recBtn) recBtn.disabled = true;
+            if (upBtn) upBtn.disabled = true;
+            loadFeed();
+        } catch(e) { showToast('Error uploading track'); }
     }
 
     function stopRecordingAndPlayback() {
@@ -261,6 +309,42 @@
         display.textContent = m.toString().padStart(2,'0') + ':' + s.toString().padStart(2,'0') + ':' + ms.toString().padStart(2,'0');
     }
 
+    // Version Tree Display
+    async function showVersionTree() {
+        if (!currentSong) return;
+        try {
+            const tree = await api.getVersionTree(currentSong.id);
+            const modal = document.getElementById('versions-modal');
+            const container = document.getElementById('version-tree');
+            container.innerHTML = renderVersionTree(tree);
+            modal.style.display = 'flex';
+        } catch(e) { showToast('Error loading version tree'); }
+    }
+
+    function renderVersionTree(node, level = 0) {
+        if (!node) return '';
+        const isCurrent = currentSong && currentSong.id === node.id;
+        let html = `<div class="version-node ${node.parentId === null ? 'original' : ''}" style="margin-left: ${level * 20}px">
+            <div class="version-item ${isCurrent ? 'current' : ''}" onclick="window.selectSong('${node.id}'); document.getElementById('versions-modal').style.display = 'none'">
+                <img class="version-thumb" src="${node.thumbnail}">
+                <div class="version-info">
+                    <div class="version-title">${escape(node.title)}${node.isOwner ? '<span class="version-badge-icon">OWNER</span>' : ''}</div>
+                    <div class="version-creator">by ${escape(node.creator)}</div>
+                    <div class="version-stats">🎵 ${node.trackCount} tracks | 👍 ${node.likes}</div>
+                </div>
+                ${isCurrent ? '<div style="font-size:10px;color:#667eea">▼ CURRENT</div>' : ''}
+            </div>`;
+        if (node.children && node.children.length) {
+            html += `<div class="children-container">`;
+            for (let child of node.children) {
+                html += renderVersionTree(child, level + 1);
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+        return html;
+    }
+
     // Display Functions
     function displaySongList(songs) {
         const container = document.getElementById('song-list');
@@ -273,11 +357,11 @@
             html += '<img class="song-thumb" src="' + escape(s.thumbnail) + '">';
             html += '<div class="song-info">';
             html += '<div class="song-title">' + escape(s.title);
-            if (s.parentId) html += '<span class="fork-badge">FORK</span>';
+            if (s.parentId) html += '<span class="version-badge">VERSION</span>';
             if (isOwnerFlag) html += '<span class="owner-badge">OWNER</span>';
             html += '</div>';
             html += '<div class="song-creator" onclick="event.stopPropagation(); window.viewUser(\'' + escape(s.creator) + '\')">' + escape(s.creator) + '</div>';
-            html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes | 🔀 ' + (s.forkCount || 0) + ' forks</div>';
+            html += '<div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + ' likes | 🌳 ' + (s.childCount || 0) + ' versions</div>';
             html += '</div>';
             if (isOwnerFlag) {
                 html += '<div class="song-actions" onclick="event.stopPropagation()">';
@@ -321,17 +405,17 @@
             
             const titleEl = document.getElementById('current-song-title');
             const creatorEl = document.getElementById('song-creator');
-            const versionBadge = document.getElementById('version-badge');
+            const versionInfo = document.getElementById('version-info');
             const bpmInput = document.getElementById('bpm-input');
             const bpmLock = document.getElementById('bpm-lock');
-            const forkBtn = document.getElementById('fork-song-btn');
+            const versionsBtn = document.getElementById('view-versions-btn');
             
             if (titleEl) titleEl.textContent = currentSong.title;
             if (creatorEl) creatorEl.innerHTML = 'Created by <span style="color:#667eea;cursor:pointer" onclick="window.viewUser(\'' + escape(currentSong.creator) + '\')">' + escape(currentSong.creator) + '</span> • ' + currentSong.genre + ' • ' + currentSong.bpm + ' BPM';
-            if (versionBadge) versionBadge.innerHTML = currentSong.parentId ? '🔀 Fork of original' : '📀 Original Version';
+            if (versionInfo) versionInfo.innerHTML = currentSong.parentId ? `<span style="color:#f39c12">🔀 Version of <span style="cursor:pointer" onclick="window.viewOriginal('${currentSong.parentId}')">original</span></span>` : `📀 Original Track • ${currentSong.children?.length || 0} versions`;
             if (bpmInput) { bpmInput.value = currentSong.bpm; bpmInput.disabled = !isOwner; }
             if (bpmLock) { bpmLock.className = 'bpm-lock ' + (isOwner ? 'unlocked' : ''); bpmLock.innerHTML = isOwner ? '🔓' : '🔒'; }
-            if (forkBtn) forkBtn.style.display = 'inline-block';
+            if (versionsBtn) versionsBtn.style.display = 'inline-block';
             bpm = currentSong.bpm;
             
             if (socket) socket.emit('join-song', id);
@@ -352,6 +436,10 @@
         } catch(e) { showToast('Error loading song'); console.error(e); }
     };
 
+    window.viewOriginal = async function(parentId) {
+        await selectSong(parentId);
+    };
+
     function displayTracks() {
         const container = document.getElementById('track-mixer');
         if (!container) return;
@@ -370,11 +458,30 @@
             html += '<button class="vote-btn" onclick="window.voteTrack(\'' + t.id + '\', \'up\')">👍 Upvote</button>';
             html += '<button class="vote-btn" onclick="window.voteTrack(\'' + t.id + '\', \'down\')">👎 Downvote</button>';
             html += '<input type="range" class="volume-slider" min="0" max="1" step="0.01" value="' + (t.volume || 0.8) + '" onchange="window.adjustVolume(\'' + t.id + '\', this.value)">';
-            if (isCurrentUserTrack) html += '<button class="delete-btn" onclick="window.deleteTrack(\'' + t.id + '\')">🗑️ Delete</button>';
+            if (isCurrentUserTrack) {
+                html += '<button class="delete-btn" onclick="window.deleteTrack(\'' + t.id + '\')">🗑️ Delete</button>';
+                html += '<div class="fx-section" id="fx-section-' + t.id + '">';
+                html += '<button class="fx-btn ' + (t.fx?.reverb ? 'active' : '') + '" onclick="window.toggleTrackFX(\'' + t.id + '\', \'reverb\')">🎛️ Reverb</button>';
+                html += '<button class="fx-btn ' + (t.fx?.delay ? 'active' : '') + '" onclick="window.toggleTrackFX(\'' + t.id + '\', \'delay\')">⏱️ Delay</button>';
+                html += '<button class="fx-btn ' + (t.fx?.distortion ? 'active' : '') + '" onclick="window.toggleTrackFX(\'' + t.id + '\', \'distortion\')">🎸 Distortion</button>';
+                html += '<button class="fx-btn ' + (t.fx?.lowpass ? 'active' : '') + '" onclick="window.toggleTrackFX(\'' + t.id + '\', \'lowpass\')">🔽 Low Pass</button>';
+                html += '</div>';
+            }
             html += '</div></div>';
         }
         container.innerHTML = html;
     }
+
+    window.toggleTrackFX = async function(trackId, fxName) {
+        const track = currentSong.tracks.find(t => t.id === trackId);
+        if (!track) return;
+        if (!track.fx) track.fx = {};
+        track.fx[fxName] = !track.fx[fxName];
+        displayTracks();
+        try {
+            await api.updateTrackFx(currentSong.id, trackId, { [fxName]: track.fx[fxName] });
+        } catch(e) { console.error(e); }
+    };
 
     async function displayComments() {
         const container = document.getElementById('comments-list');
@@ -400,6 +507,19 @@
             displayComments();
         } catch(e) { showToast('Error liking comment'); }
     };
+
+    async function postComment() {
+        const input = document.getElementById('comment-input');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+        try {
+            await api.addComment(currentSong.id, text);
+            input.value = '';
+            currentSong = await api.getSong(currentSong.id);
+            displayComments();
+        } catch(e) { showToast('Error posting comment'); }
+    }
 
     window.toggleMute = async function(id) {
         const track = currentSong.tracks.find(t => t.id === id);
@@ -459,7 +579,7 @@
                         html += '<img src="' + escape(s.thumbnail) + '"><div class="trending-info">';
                         html += '<div class="trending-title">' + escape(s.title) + '</div>';
                         html += '<div class="trending-creator" onclick="event.stopPropagation(); window.viewUser(\'' + escape(s.creator) + '\')">' + escape(s.creator) + '</div>';
-                        html += '<div class="trending-stats">👍 ' + s.likes + ' • 🎵 ' + s.trackCount + '</div>';
+                        html += '<div class="trending-stats">👍 ' + s.likes + ' • 🎵 ' + s.trackCount + ' • 🌳 ' + (s.childCount || 0) + '</div>';
                         html += '</div></div>';
                     }
                     trendingContainer.innerHTML = html;
@@ -472,10 +592,10 @@
                     let html = '';
                     for (let item of feed.activityFeed) {
                         html += '<div class="activity-item" onclick="window.selectSong(\'' + item.id + '\')">';
-                        html += '<div class="activity-icon">' + (item.type === 'fork' ? '🔀' : '🆕') + '</div>';
+                        html += '<div class="activity-icon">' + (item.type === 'version' ? '🔀' : '🆕') + '</div>';
                         html += '<div class="activity-info">';
                         html += '<div class="activity-title">' + escape(item.title) + '</div>';
-                        html += '<div class="activity-detail">' + (item.type === 'fork' ? 'Forked from' : 'Created by') + ' ' + escape(item.creator) + '</div>';
+                        html += '<div class="activity-detail">' + (item.type === 'version' ? 'Version of' : 'Created by') + ' ' + escape(item.creator) + '</div>';
                         html += '</div>';
                         html += '<div class="activity-time">👍 ' + item.likes + '</div>';
                         html += '</div>';
@@ -585,20 +705,6 @@
         currentEditThumbnail = newThumb;
     }
 
-    // Other Functions
-    async function postComment() {
-        const input = document.getElementById('comment-input');
-        if (!input) return;
-        const text = input.value.trim();
-        if (!text) return;
-        try {
-            await api.addComment(currentSong.id, text);
-            input.value = '';
-            currentSong = await api.getSong(currentSong.id);
-            displayComments();
-        } catch(e) { showToast('Error posting comment'); }
-    }
-
     async function createSong() {
         const title = document.getElementById('new-title').value;
         let b = parseInt(document.getElementById('new-bpm').value);
@@ -615,35 +721,6 @@
             document.getElementById('new-title').value = '';
             loadSongs(); loadFeed(); window.selectSong(song.id);
         } catch(e) { showToast('Error creating song'); }
-    }
-
-    async function forkSong() {
-        const newTitle = document.getElementById('fork-new-title').value;
-        if (!newTitle) return showToast('Enter a title for your fork');
-        try {
-            const song = await api.createSong({ title: newTitle, bpm: currentSong.bpm, genre: currentSong.genre, parentId: currentSong.id });
-            showToast('Fork created!');
-            document.getElementById('fork-modal').style.display = 'none';
-            document.getElementById('fork-new-title').value = '';
-            loadSongs(); loadFeed(); window.selectSong(song.id);
-        } catch(e) { showToast('Error creating fork'); }
-    }
-
-    async function uploadTrackFile() {
-        const file = document.getElementById('audio-file').files[0];
-        if (!file) return showToast('Select a file');
-        if (currentSong.tracks.some(t => t.username === currentUser.username)) return showToast('You already have a track! Fork this song to add another.');
-        try {
-            await api.uploadTrack(currentSong.id, file);
-            showToast('Track uploaded!');
-            currentSong = await api.getSong(currentSong.id);
-            displayTracks();
-            const recBtn = document.getElementById('record-btn');
-            const upBtn = document.getElementById('upload-btn');
-            if (recBtn) recBtn.disabled = true;
-            if (upBtn) upBtn.disabled = true;
-            loadFeed();
-        } catch(e) { showToast('Error uploading track'); }
     }
 
     async function updateBpm() {
@@ -697,7 +774,7 @@
                 else {
                     let html = '';
                     for (let s of mySongs) {
-                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')"><img class="song-thumb" src="' + s.thumbnail + '"><div class="song-info"><div class="song-title">' + escape(s.title) + '</div><div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
+                        html += '<div class="song-card" onclick="window.selectSong(\'' + s.id + '\')"><img class="song-thumb" src="' + s.thumbnail + '"><div class="song-info"><div class="song-title">' + escape(s.title) + (s.parentId ? '<span class="version-badge">VERSION</span>' : '') + '</div><div class="song-stats">🎵 ' + s.trackCount + ' tracks | 👍 ' + s.likes + '</div></div></div>';
                     }
                     tracksDiv.innerHTML = html;
                 }
@@ -714,14 +791,21 @@
             document.getElementById('edit-followers').textContent = user.followers?.length || 0;
             document.getElementById('edit-following').textContent = user.following?.length || 0;
             document.getElementById('edit-tracks').textContent = user.contributedTo?.length || 0;
+            const disableTutorial = document.getElementById('disable-tutorial');
+            if (disableTutorial) disableTutorial.checked = user.tutorialCompleted;
             document.getElementById('profile-modal').style.display = 'flex';
         } catch(e) { showToast('Error loading profile'); }
     }
 
     async function saveProfile() {
         const bio = document.getElementById('edit-bio').value;
+        const disableTutorial = document.getElementById('disable-tutorial');
         try {
             await api.updateBio(bio);
+            if (disableTutorial) {
+                await api.updateTutorial(disableTutorial.checked);
+                currentUser.tutorialCompleted = disableTutorial.checked;
+            }
             showToast('Profile updated');
             document.getElementById('profile-modal').style.display = 'none';
             loadProfile();
@@ -869,11 +953,14 @@
         const tutorialOverlay = document.getElementById('tutorial-overlay');
         if (!tutorialOverlay) return;
         tutorialOverlay.style.display = 'flex';
+        const dontShow = document.getElementById('tutorial-dont-show');
         const finishBtn = document.getElementById('tutorial-finish');
         if (finishBtn) {
             finishBtn.onclick = async () => {
-                await api.updateTutorial();
-                currentUser.tutorialCompleted = true;
+                if (dontShow && dontShow.checked) {
+                    await api.updateTutorial(true);
+                    currentUser.tutorialCompleted = true;
+                }
                 tutorialOverlay.style.display = 'none';
             };
         }
@@ -884,7 +971,7 @@
         socket.on('connect', () => console.log('Socket connected'));
         socket.on('track-added', async (data) => { if (currentSong && currentSong.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadFeed(); });
         socket.on('track-deleted', async (data) => { if (currentSong && currentSong.id === data.songId) { currentSong = await api.getSong(currentSong.id); displayTracks(); } loadSongs(); loadFeed(); });
-        socket.on('track-updated', (data) => { if (currentSong) { const t = currentSong.tracks.find(tr => tr.id === data.trackId); if (t && data.updates) { if (data.updates.muted !== undefined) t.muted = data.updates.muted; if (data.updates.volume !== undefined) t.volume = data.updates.volume; displayTracks(); } } });
+        socket.on('track-updated', (data) => { if (currentSong) { const t = currentSong.tracks.find(tr => tr.id === data.trackId); if (t && data.updates) { if (data.updates.muted !== undefined) t.muted = data.updates.muted; if (data.updates.volume !== undefined) t.volume = data.updates.volume; if (data.updates.fx !== undefined) t.fx = data.updates.fx; displayTracks(); } } });
         socket.on('transport-state', (state) => { if (state.bpm && state.bpm !== bpm && currentSong && !isOwner) { bpm = state.bpm; const bpmInput = document.getElementById('bpm-input'); if (bpmInput) bpmInput.value = bpm; } });
         socket.on('bpm-changed', (data) => { if (currentSong && !isOwner) { bpm = data.bpm; const bpmInput = document.getElementById('bpm-input'); if (bpmInput) bpmInput.value = bpm; } });
         socket.on('new-message', (msg) => { if (currentChatUser === msg.from) loadConversation(msg.from); showToast('New message from ' + msg.from); loadRecentChats(); });
@@ -994,6 +1081,10 @@
         if (closeUserModal) closeUserModal.onclick = () => document.getElementById('user-modal').style.display = 'none';
         const closeEditModal = document.querySelector('.close-edit-modal');
         if (closeEditModal) closeEditModal.onclick = closeEditSongModal;
+        const closeVersionsModal = document.querySelector('.close-versions-modal');
+        if (closeVersionsModal) closeVersionsModal.onclick = () => document.getElementById('versions-modal').style.display = 'none';
+        const closeVersions = document.getElementById('close-versions');
+        if (closeVersions) closeVersions.onclick = () => document.getElementById('versions-modal').style.display = 'none';
         
         // Save profile
         const saveProfileBtn = document.getElementById('save-profile');
@@ -1060,19 +1151,9 @@
         const backBtn = document.getElementById('back-btn');
         if (backBtn) backBtn.onclick = backToLibrary;
         
-        // Fork
-        const forkBtn = document.getElementById('fork-song-btn');
-        if (forkBtn) {
-            forkBtn.onclick = () => {
-                const forkTitle = document.getElementById('fork-title');
-                if (forkTitle && currentSong) forkTitle.textContent = currentSong.title;
-                document.getElementById('fork-modal').style.display = 'flex';
-            };
-        }
-        const confirmFork = document.getElementById('confirm-fork');
-        if (confirmFork) confirmFork.onclick = forkSong;
-        const cancelFork = document.getElementById('cancel-fork');
-        if (cancelFork) cancelFork.onclick = () => document.getElementById('fork-modal').style.display = 'none';
+        // Versions button
+        const versionsBtn = document.getElementById('view-versions-btn');
+        if (versionsBtn) versionsBtn.onclick = showVersionTree;
         
         // Comments
         const postCommentBtn = document.getElementById('post-comment');
@@ -1114,7 +1195,7 @@
         }
         
         // Close modals on outside click
-        const modals = ['create-modal', 'fork-modal', 'edit-song-modal', 'profile-modal', 'user-modal'];
+        const modals = ['create-modal', 'edit-song-modal', 'profile-modal', 'user-modal', 'versions-modal'];
         for (let id of modals) {
             const modal = document.getElementById(id);
             if (modal) {
@@ -1149,3 +1230,18 @@
         }
     });
 })();
+
+// Make functions global
+window.selectSong = window.selectSong;
+window.toggleMute = window.toggleMute;
+window.adjustVolume = window.adjustVolume;
+window.voteTrack = window.voteTrack;
+window.deleteTrack = window.deleteTrack;
+window.viewUser = window.viewUser;
+window.followUser = window.followUser;
+window.startChat = window.startChat;
+window.followFromFeed = window.followFromFeed;
+window.likeComment = window.likeComment;
+window.openEditSongModal = window.openEditSongModal;
+window.toggleTrackFX = window.toggleTrackFX;
+window.viewOriginal = window.viewOriginal;

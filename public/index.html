@@ -83,16 +83,16 @@
       <div id="song-list" class="song-grid"><div class="loading">Loading tracks...</div></div>
     </div>
 
-    <!-- Studio View (Hidden until song selected) -->
+    <!-- Studio View -->
     <div id="studio-view" class="studio-view">
       <div class="studio-header">
         <div>
           <h2 id="current-song-title">Select a track</h2>
           <p id="song-creator"></p>
-          <span id="version-badge" class="version-badge"></span>
+          <div id="version-info" class="version-info"></div>
         </div>
         <div class="studio-actions">
-          <button id="fork-song-btn" class="fork-btn" style="display:none">🔀 Fork</button>
+          <button id="view-versions-btn" class="versions-btn" style="display:none">🌳 View Versions</button>
           <button class="back-btn" id="back-btn">← Back</button>
         </div>
       </div>
@@ -122,6 +122,20 @@
         <div class="comment-input-area">
           <input type="text" id="comment-input" placeholder="Add a comment...">
           <button id="post-comment">Post</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Versions Modal -->
+    <div id="versions-modal" class="modal-overlay">
+      <div class="modal-card versions-modal-card">
+        <div class="modal-header">
+          <h3>🌳 Version Tree</h3>
+          <button class="close-versions-modal">&times;</button>
+        </div>
+        <div id="version-tree" class="version-tree"></div>
+        <div class="modal-buttons">
+          <button id="close-versions" class="cancel-btn">Close</button>
         </div>
       </div>
     </div>
@@ -172,19 +186,6 @@
       </div>
     </div>
 
-    <!-- Fork Modal -->
-    <div id="fork-modal" class="modal-overlay">
-      <div class="modal-card">
-        <h3>🔀 Fork This Track</h3>
-        <p>Create your own version of "<span id="fork-title"></span>"</p>
-        <input type="text" id="fork-new-title" placeholder="New version title">
-        <div class="modal-buttons">
-          <button id="confirm-fork">Fork</button>
-          <button id="cancel-fork">Cancel</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Edit Song Modal -->
     <div id="edit-song-modal" class="modal-overlay">
       <div class="modal-card">
@@ -221,6 +222,11 @@
         <div class="avatar-section"><img id="edit-avatar"><button id="change-avatar">Change Avatar</button><input type="file" id="avatar-file" accept="image/*" style="display:none"></div>
         <textarea id="edit-bio" rows="3" placeholder="Tell us about yourself..."></textarea>
         <div class="stats-row"><div><span id="edit-followers">0</span><label>Followers</label></div><div><span id="edit-following">0</span><label>Following</label></div><div><span id="edit-tracks">0</span><label>Tracks</label></div></div>
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="disable-tutorial"> Disable Tutorial
+          </label>
+        </div>
         <button id="save-profile">Save Changes</button>
       </div>
     </div>
@@ -237,9 +243,15 @@
     <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
       <div class="tutorial-card">
         <h2>🎵 Welcome to TrackStars!</h2>
-        <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create or Fork Songs</strong><br>Create your own track or fork existing ones!</p></div>
-        <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Record Your Track</strong><br>Hit record and play along with existing tracks.</p></div>
-        <div class="tutorial-step"><div class="tutorial-icon">👍</div><p><strong>Vote & Collaborate</strong><br>Upvote tracks you like and collaborate!</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create a Track</strong><br>Start by creating your own original track.</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Add Your Sound</strong><br>Record or upload your audio to a track.</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">🔀</div><p><strong>Version Control</strong><br>When you add to someone else's track, it creates a new version!</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">🌳</div><p><strong>Version Tree</strong><br>See all versions and how they connect to the original.</p></div>
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="tutorial-dont-show"> Don't show again
+          </label>
+        </div>
         <button id="tutorial-finish" class="tutorial-btn">Get Started →</button>
       </div>
     </div>
