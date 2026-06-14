@@ -28,7 +28,8 @@
             }
             return res.json();
         },
-        getSongs: () => api.request('/api/songs'),
+        getMySongs: () => api.request('/api/songs/my'),
+        getAllSongs: () => api.request('/api/songs/all'),
         getSong: (id) => api.request('/api/songs/' + id),
         createSong: (data) => api.request('/api/songs', { method: 'POST', body: JSON.stringify(data) }),
         editSongTitle: (id, title) => api.request('/api/songs/' + id + '/title', { method: 'PUT', body: JSON.stringify({ title }) }),
@@ -252,7 +253,7 @@
                         if (statusDiv) statusDiv.innerHTML = ''; 
                     }, 3000);
                     loadFeed(); 
-                    loadSongs();
+                    loadMySongs();
                 } catch(e) { 
                     if (statusDiv) statusDiv.innerHTML = '❌ Upload failed'; 
                     showToast('Upload failed'); 
@@ -322,6 +323,8 @@
             showToast('You already have a track in this song!');
             return;
         }
+        const statusDiv = document.getElementById('recording-status');
+        if (statusDiv) statusDiv.innerHTML = '📤 Uploading track...';
         try {
             await api.uploadTrack(currentSong.id, file);
             showToast('Track added!');
@@ -331,8 +334,12 @@
             const upBtn = document.getElementById('upload-btn');
             if (recBtn) recBtn.disabled = true;
             if (upBtn) upBtn.disabled = true;
+            if (statusDiv) statusDiv.innerHTML = '✅ Track uploaded!';
+            setTimeout(function() { if (statusDiv) statusDiv.innerHTML = ''; }, 2000);
             loadFeed();
+            loadMySongs();
         } catch(e) { 
+            if (statusDiv) statusDiv.innerHTML = '❌ Upload failed'; 
             showToast('Error uploading track'); 
         }
     }
@@ -388,41 +395,29 @@
         container.innerHTML = html;
     }
 
-    async function loadSongs() {
+    async function loadMySongs() {
         try {
-            const songs = await api.getSongs();
+            const songs = await api.getMySongs();
             displaySongList(songs);
         } catch(e) { 
             console.error(e); 
-            showToast('Error loading songs'); 
+            showToast('Error loading your tracks'); 
         }
     }
 
-    // Make selectSong globally accessible and ensure it works
     window.selectSong = async function(id) {
-        console.log('selectSong called with id:', id);
         try {
-            // Stop any ongoing playback
             if (isPlaying) stopPlayback();
             if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-            if (stream) {
-                stream.getTracks().forEach(function(t) { t.stop(); });
-                stream = null;
-            }
-            if (audioCtx) {
-                await audioCtx.close();
-                audioCtx = null;
-            }
+            if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+            if (audioCtx) await audioCtx.close();
             buffers.clear(); 
             sources = []; 
             gains.clear();
-            
-            // Fetch the song data
+            audioCtx = null;
             currentSong = await api.getSong(id);
-            console.log('Song loaded:', currentSong.title);
             isOwner = (currentSong.creator === currentUser.username);
             
-            // Update UI elements
             const titleEl = document.getElementById('current-song-title');
             const creatorEl = document.getElementById('song-creator');
             const bpmInput = document.getElementById('bpm-input');
@@ -442,14 +437,10 @@
             }
             bpm = currentSong.bpm;
             
-            // Join the song room via socket
             if (socket) socket.emit('join-song', id);
-            
-            // Display tracks and comments
             displayTracks();
             displayComments();
             
-            // Check if user already has a track
             let hasTrack = false;
             if (currentSong.tracks) {
                 for (let i = 0; i < currentSong.tracks.length; i++) {
@@ -466,25 +457,19 @@
             currentPos = 0;
             updateDisplay(0);
             
-            // Hide all regular views
             const views = document.querySelectorAll('.view');
             for (let i = 0; i < views.length; i++) {
                 views[i].classList.remove('active');
             }
-            
-            // Show studio view
             const studioView = document.getElementById('studio-view');
             if (studioView) {
                 studioView.classList.add('active');
                 studioView.style.display = 'block';
             }
-            
-            // Remove active class from nav items
             const navItems = document.querySelectorAll('.nav-item');
             for (let i = 0; i < navItems.length; i++) {
                 navItems[i].classList.remove('active');
             }
-            
         } catch(e) { 
             console.error('Error loading song:', e);
             showToast('Error loading song: ' + e.message); 
@@ -662,7 +647,7 @@
             if (recBtn) recBtn.disabled = false;
             if (upBtn) upBtn.disabled = false;
             loadFeed(); 
-            loadSongs();
+            loadMySongs();
         } catch(e) { 
             showToast('Error deleting track'); 
         }
@@ -682,7 +667,7 @@
             showToast('Song created! Now add your first track!');
             document.getElementById('create-modal').style.display = 'none';
             document.getElementById('new-title').value = '';
-            loadSongs(); 
+            loadMySongs(); 
             loadFeed(); 
             await window.selectSong(song.id);
             setTimeout(function() {
@@ -744,7 +729,7 @@
         const libraryNav = document.querySelector('.nav-item[data-view="library"]');
         if (libraryNav) libraryNav.classList.add('active');
         
-        loadSongs();
+        loadMySongs();
     }
 
     // Edit Song Functions
@@ -797,7 +782,7 @@
                 if (titleEl) titleEl.textContent = currentSong.title;
             }
             closeEditSongModal();
-            loadSongs();
+            loadMySongs();
             loadFeed();
             if (currentSong && currentSong.id === currentEditingSong.id) displayTracks();
             showToast('Changes saved!');
@@ -814,7 +799,7 @@
             showToast('Song deleted!');
             closeEditSongModal();
             if (currentSong && currentSong.id === currentEditingSong.id) backToLibrary();
-            loadSongs();
+            loadMySongs();
             loadFeed();
         } catch(e) { 
             showToast('Error deleting song: ' + e.message); 
@@ -925,7 +910,7 @@
         if (!container) return;
         try {
             const user = await api.getUser(currentUser.username);
-            const allSongs = await api.getSongs();
+            const allSongs = await api.getAllSongs();
             
             let myCreatedTracks = [];
             let myContributions = [];
@@ -1198,7 +1183,7 @@
             const modalContent = document.getElementById('user-modal-content');
             if (!modal || !modalContent) return;
             
-            const allSongs = await api.getSongs();
+            const allSongs = await api.getAllSongs();
             let userCreatedTracks = [];
             let userContributions = [];
             
@@ -1297,6 +1282,154 @@
         }
     };
 
+    // Export Mix Functions
+    async function exportMix(format) {
+        if (!currentSong || !currentSong.tracks || currentSong.tracks.length === 0) {
+            showToast('No tracks to export');
+            return;
+        }
+        
+        const modal = document.getElementById('export-modal');
+        const progressBar = document.getElementById('export-progress-bar');
+        const statusText = document.getElementById('export-status');
+        const exportOptions = document.querySelector('.export-options');
+        
+        if (exportOptions) exportOptions.style.display = 'none';
+        if (document.getElementById('export-progress')) document.getElementById('export-progress').style.display = 'block';
+        if (progressBar) progressBar.style.width = '0%';
+        if (statusText) statusText.textContent = 'Loading tracks...';
+        
+        try {
+            const offlineCtx = new OfflineAudioContext(2, 44100 * 120, 44100);
+            const trackBuffers = [];
+            let loadedCount = 0;
+            
+            if (statusText) statusText.textContent = `Loading tracks (0/${currentSong.tracks.length})...`;
+            
+            for (let i = 0; i < currentSong.tracks.length; i++) {
+                const track = currentSong.tracks[i];
+                if (track.muted) continue;
+                
+                const response = await fetch(track.audioUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
+                trackBuffers.push({ buffer: audioBuffer, volume: track.volume });
+                
+                loadedCount++;
+                if (progressBar) progressBar.style.width = `${(loadedCount / currentSong.tracks.length) * 50}%`;
+                if (statusText) statusText.textContent = `Loading tracks (${loadedCount}/${currentSong.tracks.length})...`;
+            }
+            
+            if (statusText) statusText.textContent = 'Mixing tracks...';
+            if (progressBar) progressBar.style.width = '60%';
+            
+            const duration = Math.max(...trackBuffers.map(tb => tb.buffer.duration));
+            const mixCtx = new OfflineAudioContext(2, 44100 * duration, 44100);
+            
+            for (let i = 0; i < trackBuffers.length; i++) {
+                const tb = trackBuffers[i];
+                const source = mixCtx.createBufferSource();
+                const gain = mixCtx.createGain();
+                source.buffer = tb.buffer;
+                gain.gain.value = tb.volume;
+                source.connect(gain);
+                gain.connect(mixCtx.destination);
+                source.start();
+                if (progressBar) progressBar.style.width = `${60 + (i / trackBuffers.length) * 30}%`;
+            }
+            
+            if (statusText) statusText.textContent = 'Rendering mix...';
+            if (progressBar) progressBar.style.width = '90%';
+            
+            const renderedBuffer = await mixCtx.startRendering();
+            
+            if (statusText) statusText.textContent = 'Creating file...';
+            if (progressBar) progressBar.style.width = '95%';
+            
+            const wavBlob = bufferToWav(renderedBuffer);
+            const url = URL.createObjectURL(wavBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentSong.title.replace(/[^a-z0-9]/gi, '_')}_mix.wav`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            if (progressBar) progressBar.style.width = '100%';
+            if (statusText) statusText.textContent = 'Export complete!';
+            
+            setTimeout(() => {
+                if (modal) modal.style.display = 'none';
+                if (exportOptions) exportOptions.style.display = 'flex';
+                if (document.getElementById('export-progress')) document.getElementById('export-progress').style.display = 'none';
+                if (progressBar) progressBar.style.width = '0%';
+            }, 1500);
+            
+            showToast('Mix exported successfully!');
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            showToast('Error exporting mix: ' + error.message);
+            if (exportOptions) exportOptions.style.display = 'flex';
+            if (document.getElementById('export-progress')) document.getElementById('export-progress').style.display = 'none';
+            if (modal) modal.style.display = 'none';
+        }
+    }
+
+    function bufferToWav(buffer) {
+        const numChannels = buffer.numberOfChannels;
+        const sampleRate = buffer.sampleRate;
+        const format = 1;
+        const bitDepth = 16;
+        
+        let samples = buffer.getChannelData(0);
+        if (numChannels === 2) {
+            const left = samples;
+            const right = buffer.getChannelData(1);
+            const interleaved = new Float32Array(left.length * 2);
+            for (let i = 0; i < left.length; i++) {
+                interleaved[i * 2] = left[i];
+                interleaved[i * 2 + 1] = right[i];
+            }
+            samples = interleaved;
+        }
+        
+        const dataLength = samples.length * (bitDepth / 8);
+        const bufferLength = 44 + dataLength;
+        const arrayBuffer = new ArrayBuffer(bufferLength);
+        const view = new DataView(arrayBuffer);
+        
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, bufferLength - 8, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, format, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+        view.setUint16(32, numChannels * (bitDepth / 8), true);
+        view.setUint16(34, bitDepth, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, dataLength, true);
+        
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            offset += 2;
+        }
+        
+        return new Blob([view], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, str) {
+        for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+    }
+
     // Tutorial
     async function showTutorial() {
         if (currentUser.tutorialCompleted) return;
@@ -1325,7 +1458,7 @@
                 currentSong = await api.getSong(currentSong.id); 
                 displayTracks(); 
             } 
-            loadSongs(); 
+            loadMySongs(); 
             loadFeed(); 
         });
         socket.on('track-deleted', async function(data) { 
@@ -1333,7 +1466,7 @@
                 currentSong = await api.getSong(currentSong.id); 
                 displayTracks(); 
             } 
-            loadSongs(); 
+            loadMySongs(); 
             loadFeed(); 
         });
         socket.on('track-updated', function(data) { 
@@ -1358,12 +1491,12 @@
             if (currentSong) displayComments(); 
         });
         socket.on('song-updated', function() { 
-            loadSongs(); 
+            loadMySongs(); 
             loadFeed(); 
         });
         socket.on('song-deleted', function() { 
             if (currentSong) backToLibrary(); 
-            loadSongs(); 
+            loadMySongs(); 
             loadFeed(); 
         });
         socket.emit('join-chat', currentUser.username);
@@ -1397,7 +1530,7 @@
                     if (chatRecent) chatRecent.style.display = 'block';
                     if (chatConversation) chatConversation.style.display = 'none';
                 }
-                if (view === 'library') loadSongs();
+                if (view === 'library') loadMySongs();
                 if (view === 'feed') loadFeed();
             };
         }
@@ -1429,6 +1562,49 @@
         toast.textContent = msg; 
         document.body.appendChild(toast); 
         setTimeout(function() { toast.remove(); }, duration); 
+    }
+
+    // Export Listeners
+    function setupExportListeners() {
+        const exportBtn = document.getElementById('export-mix-btn');
+        if (exportBtn) {
+            exportBtn.onclick = function() {
+                if (!currentSong || !currentSong.tracks || currentSong.tracks.length === 0) {
+                    showToast('No tracks to export');
+                    return;
+                }
+                const modal = document.getElementById('export-modal');
+                if (modal) modal.style.display = 'flex';
+            };
+        }
+        
+        const exportWav = document.getElementById('export-wav');
+        if (exportWav) exportWav.onclick = function() { exportMix('wav'); };
+        
+        const cancelExport = document.getElementById('cancel-export');
+        if (cancelExport) {
+            cancelExport.onclick = function() {
+                const modal = document.getElementById('export-modal');
+                if (modal) modal.style.display = 'none';
+                const exportOptions = document.querySelector('.export-options');
+                if (exportOptions) exportOptions.style.display = 'flex';
+                const exportProgress = document.getElementById('export-progress');
+                if (exportProgress) exportProgress.style.display = 'none';
+            };
+        }
+        
+        const exportModal = document.getElementById('export-modal');
+        if (exportModal) {
+            exportModal.onclick = function(e) {
+                if (e.target === exportModal) {
+                    exportModal.style.display = 'none';
+                    const exportOptions = document.querySelector('.export-options');
+                    if (exportOptions) exportOptions.style.display = 'flex';
+                    const exportProgress = document.getElementById('export-progress');
+                    if (exportProgress) exportProgress.style.display = 'none';
+                }
+            };
+        }
     }
 
     // Event Listeners
@@ -1463,10 +1639,11 @@
                     document.getElementById('current-user').textContent = currentUser.username;
                     document.getElementById('header-avatar').src = currentUser.avatar;
                     initSocket();
-                    loadSongs();
+                    loadMySongs();
                     loadFeed();
                     initNav();
                     showTutorial();
+                    setupExportListeners();
                 } catch(err) {
                     document.getElementById('login-error').textContent = err.message;
                 }
@@ -1485,10 +1662,11 @@
                     document.getElementById('current-user').textContent = currentUser.username;
                     document.getElementById('header-avatar').src = currentUser.avatar;
                     initSocket();
-                    loadSongs();
+                    loadMySongs();
                     loadFeed();
                     initNav();
                     showTutorial();
+                    setupExportListeners();
                 } catch(err) {
                     document.getElementById('register-error').textContent = err.message;
                 }
@@ -1651,7 +1829,7 @@
         }
         
         // Close modals on outside click
-        const modals = ['create-modal', 'edit-song-modal', 'profile-modal', 'user-modal'];
+        const modals = ['create-modal', 'edit-song-modal', 'profile-modal', 'user-modal', 'export-modal'];
         for (let i = 0; i < modals.length; i++) {
             const modal = document.getElementById(modals[i]);
             if (modal) {
@@ -1677,10 +1855,11 @@
             document.getElementById('current-user').textContent = currentUser.username;
             document.getElementById('header-avatar').src = currentUser.avatar;
             initSocket();
-            loadSongs();
+            loadMySongs();
             loadFeed();
             initNav();
             setupEventListeners();
+            setupExportListeners();
             showTutorial();
         } else {
             document.getElementById('auth-modal').style.display = 'flex';

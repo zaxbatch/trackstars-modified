@@ -73,14 +73,14 @@
       </div>
     </div>
 
-    <!-- Library View -->
+    <!-- Library View (User's own tracks only) -->
     <div id="library-view" class="view">
       <div class="section-header">
-        <h3>📚 Song Library</h3>
+        <h3>📚 My Tracks</h3>
         <button class="create-btn" id="open-create-modal">+ New Track</button>
       </div>
-      <input type="text" id="library-search" class="search-input" placeholder="🔍 Search songs...">
-      <div id="song-list" class="song-grid"><div class="loading">Loading tracks...</div></div>
+      <input type="text" id="library-search" class="search-input" placeholder="🔍 Search my tracks...">
+      <div id="song-list" class="song-grid"><div class="loading">Loading your tracks...</div></div>
     </div>
 
     <!-- Studio View -->
@@ -91,6 +91,7 @@
           <p id="song-creator"></p>
         </div>
         <div class="studio-actions">
+          <button id="export-mix-btn" class="export-btn">📀 Export Mix</button>
           <button class="back-btn" id="back-btn">← Back</button>
         </div>
       </div>
@@ -213,6 +214,25 @@
       </div>
     </div>
 
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal-overlay">
+      <div class="modal-card">
+        <h3>📀 Export Mix</h3>
+        <p>Export your complete mix as an audio file</p>
+        <div class="export-options">
+          <button id="export-wav" class="export-option-btn">WAV (High Quality)</button>
+          <button id="export-mp3" class="export-option-btn">MP3 (Compressed)</button>
+        </div>
+        <div id="export-progress" class="export-progress" style="display:none">
+          <div class="progress-bar"><div id="export-progress-bar" class="progress-fill"></div></div>
+          <p id="export-status">Processing...</p>
+        </div>
+        <div class="modal-buttons">
+          <button id="cancel-export" class="cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Tutorial -->
     <div id="tutorial-overlay" class="tutorial-overlay" style="display: none;">
       <div class="tutorial-card">
@@ -220,7 +240,7 @@
         <div class="tutorial-step"><div class="tutorial-icon">🎛️</div><p><strong>Create a Track</strong><br>Start by creating your own original track.</p></div>
         <div class="tutorial-step"><div class="tutorial-icon">🎙️</div><p><strong>Add Your Sound</strong><br>Record or upload your audio to a track.</p></div>
         <div class="tutorial-step"><div class="tutorial-icon">👍</div><p><strong>Vote & Comment</strong><br>Upvote tracks you like and leave comments!</p></div>
-        <div class="tutorial-step"><div class="tutorial-icon">🌳</div><p><strong>Version Tree (Coming Soon!)</strong><br>Track the history and different versions of songs.</p></div>
+        <div class="tutorial-step"><div class="tutorial-icon">📀</div><p><strong>Export Mix</strong><br>Download your complete mix as an audio file.</p></div>
         <div class="checkbox-row"><label class="checkbox-label"><input type="checkbox" id="tutorial-dont-show"> Don't show again</label></div>
         <button id="tutorial-finish" class="tutorial-btn">Get Started →</button>
       </div>
